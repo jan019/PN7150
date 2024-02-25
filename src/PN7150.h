@@ -117,6 +117,7 @@ class PN7150 : public Mode {
  public:
   PN7150(uint8_t IRQpin, uint8_t VENpin, uint8_t I2Caddress, TwoWire *wire = &Wire);
   uint8_t begin(void);
+  uint8_t end(void);
   RemoteDevice remoteDevice;
   Protocol protocol;
   Tech tech;

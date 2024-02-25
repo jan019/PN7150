@@ -86,6 +86,16 @@ uint8_t PN7150::begin() {
   return SUCCESS;
 }
 
+uint8_t PN7150::end() {
+  _wire->end();
+  digitalWrite(_VENpin, LOW);
+  delay(3);
+
+  this->_hasBeenInitialized = false;
+
+  return SUCCESS;
+}
+
 bool PN7150::isTimeOut() const {
   return ((millis() - timeOutStartTime) >= timeOut);
 }
