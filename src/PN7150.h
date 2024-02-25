@@ -15,8 +15,8 @@
  * Some methods and ideas were extracted from https://github.com/Strooom/PN7150
  */
 
-#ifndef Electroniccats_PN7150_H
-#define Electroniccats_PN7150_H
+#ifndef PN7150_H
+#define PN7150_H
 
 #include <Arduino.h>  // Gives us access to all typical Arduino types and functions
                       // The HW interface between The PN7150 and the DeviceHost is I2C, so we need the I2C library.library
@@ -97,7 +97,7 @@ typedef enum {
   PRESENCE_CHECK
 } RW_Operation_t;
 
-class Electroniccats_PN7150 : public Mode {
+class PN7150 : public Mode {
  private:
   bool _hasBeenInitialized;
   uint8_t _IRQpin, _VENpin, _I2Caddress;
@@ -115,7 +115,7 @@ class Electroniccats_PN7150 : public Mode {
   bool getMessage(uint16_t timeout = 5);  // 5 miliseconds as default to wait for interrupt responses
 
  public:
-  Electroniccats_PN7150(uint8_t IRQpin, uint8_t VENpin, uint8_t I2Caddress, TwoWire *wire = &Wire);
+  PN7150(uint8_t IRQpin, uint8_t VENpin, uint8_t I2Caddress, TwoWire *wire = &Wire);
   uint8_t begin(void);
   RemoteDevice remoteDevice;
   Protocol protocol;

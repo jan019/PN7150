@@ -15,7 +15,7 @@
  * Some methods and ideas were extracted from https://github.com/Strooom/PN7150
  */
 
-#include "Electroniccats_PN7150.h"
+#include "PN7150.h"
 
 uint8_t gNextTag_Protocol = PROT_UNDETERMINED;
 
@@ -45,7 +45,7 @@ unsigned char DiscoveryTechnologiesP2P[] = {  // P2P
     MODE_LISTEN | TECH_ACTIVE_NFCA,
     MODE_LISTEN | TECH_ACTIVE_NFCF};
 
-Electroniccats_PN7150::Electroniccats_PN7150(uint8_t IRQpin, uint8_t VENpin,
+PN7150::PN7150(uint8_t IRQpin, uint8_t VENpin,
                                              uint8_t I2Caddress, TwoWire *wire) : _IRQpin(IRQpin), _VENpin(VENpin), _I2Caddress(I2Caddress), _wire(wire) {
   pinMode(_IRQpin, INPUT);
   if (_VENpin != 255)
@@ -54,7 +54,7 @@ Electroniccats_PN7150::Electroniccats_PN7150(uint8_t IRQpin, uint8_t VENpin,
   this->_hasBeenInitialized = false;
 }
 
-uint8_t Electroniccats_PN7150::begin() {
+uint8_t PN7150::begin() {
   _wire->begin();
   if (_VENpin != 255) {
     digitalWrite(_VENpin, HIGH);
@@ -86,16 +86,16 @@ uint8_t Electroniccats_PN7150::begin() {
   return SUCCESS;
 }
 
-bool Electroniccats_PN7150::isTimeOut() const {
+bool PN7150::isTimeOut() const {
   return ((millis() - timeOutStartTime) >= timeOut);
 }
 
-void Electroniccats_PN7150::setTimeOut(unsigned long theTimeOut) {
+void PN7150::setTimeOut(unsigned long theTimeOut) {
   timeOutStartTime = millis();
   timeOut = theTimeOut;
 }
 
-uint8_t Electroniccats_PN7150::wakeupNCI() {  // the device has to wake up using a core reset
+uint8_t PN7150::wakeupNCI() {  // the device has to wake up using a core reset
   uint8_t NCICoreReset[] = {0x20, 0x00, 0x01, 0x01};
   uint16_t NbBytes = 0;
 
@@ -121,7 +121,7 @@ uint8_t Electroniccats_PN7150::wakeupNCI() {  // the device has to wake up using
   return SUCCESS;
 }
 
-bool Electroniccats_PN7150::getMessage(uint16_t timeout) {  // check for message using timeout, 5 milisec as default
+bool PN7150::getMessage(uint16_t timeout) {  // check for message using timeout, 5 milisec as default
   setTimeOut(timeout);
   rxMessageLength = 0;
   while (!isTimeOut()) {
@@ -134,11 +134,11 @@ bool Electroniccats_PN7150::getMessage(uint16_t timeout) {  // check for message
   return rxMessageLength;
 }
 
-bool Electroniccats_PN7150::hasMessage() const {
+bool PN7150::hasMessage() const {
   return (HIGH == digitalRead(_IRQpin));  // PN7150 indicates it has data by driving IRQ signal HIGH
 }
 
-uint8_t Electroniccats_PN7150::writeData(uint8_t txBuffer[], uint32_t txBufferLevel) const {
+uint8_t PN7150::writeData(uint8_t txBuffer[], uint32_t txBufferLevel) const {
   uint32_t nmbrBytesWritten = 0;
   _wire->beginTransmission((uint8_t)_I2Caddress);                      // configura transmision
   nmbrBytesWritten = _wire->write(txBuffer, (size_t)(txBufferLevel));  // carga en buffer
@@ -157,7 +157,7 @@ uint8_t Electroniccats_PN7150::writeData(uint8_t txBuffer[], uint32_t txBufferLe
   }
 }
 
-uint32_t Electroniccats_PN7150::readData(uint8_t rxBuffer[]) const {
+uint32_t PN7150::readData(uint8_t rxBuffer[]) const {
   uint32_t bytesReceived;                                         // keeps track of how many bytes we actually received
   if (hasMessage()) {                                             // only try to read something if the PN7150 indicates it has something
     bytesReceived = _wire->requestFrom(_I2Caddress, (uint8_t)3);  // first reading the header, as this contains how long the payload will be
@@ -196,16 +196,16 @@ uint32_t Electroniccats_PN7150::readData(uint8_t rxBuffer[]) const {
   return bytesReceived;
 }
 
-int Electroniccats_PN7150::getFirmwareVersion() {
+int PN7150::getFirmwareVersion() {
   return ((gNfcController_fw_version[0] & 0xFF) << 16) | ((gNfcController_fw_version[1] & 0xFF) << 8) | (gNfcController_fw_version[2] & 0xFF);
 }
 
 // Deprecated, use getFirmwareVersion() instead
-int Electroniccats_PN7150::GetFwVersion() {
+int PN7150::GetFwVersion() {
   return getFirmwareVersion();
 }
 
-uint8_t Electroniccats_PN7150::connectNCI() {
+uint8_t PN7150::connectNCI() {
   uint8_t i = 2;
   uint8_t NCICoreInit[] = {0x20, 0x01, 0x00};
 
@@ -260,16 +260,16 @@ uint8_t Electroniccats_PN7150::connectNCI() {
 /// @brief Update the internal mode, stop discovery, and build the command to configure the PN7150 chip based on the input mode
 /// @param modeSE
 /// @return SUCCESS or ERROR
-uint8_t Electroniccats_PN7150::ConfigMode(uint8_t modeSE) {
+uint8_t PN7150::ConfigMode(uint8_t modeSE) {
   unsigned mode = (modeSE == 1 ? MODE_RW : modeSE == 2 ? MODE_CARDEMU
                                                        : MODE_P2P);
 
   // Update internal mode
-  if (!Electroniccats_PN7150::setMode(modeSE)) {
+  if (!PN7150::setMode(modeSE)) {
     return ERROR;  // Invalid mode, out of range
   }
 
-  Electroniccats_PN7150::stopDiscovery();
+  PN7150::stopDiscovery();
 
   uint8_t Command[MAX_NCI_FRAME_SIZE];
 
@@ -367,12 +367,12 @@ uint8_t Electroniccats_PN7150::ConfigMode(uint8_t modeSE) {
   return SUCCESS;
 }
 
-uint8_t Electroniccats_PN7150::configMode() {
-  int mode = Electroniccats_PN7150::getMode();
-  return Electroniccats_PN7150::ConfigMode(mode);
+uint8_t PN7150::configMode() {
+  int mode = PN7150::getMode();
+  return PN7150::ConfigMode(mode);
 }
 
-bool Electroniccats_PN7150::configureSettings(void) {
+bool PN7150::configureSettings(void) {
 #if NXP_CORE_CONF
   /* NCI standard dedicated settings
    * Refer to NFC Forum NCI standard for more details
@@ -639,11 +639,11 @@ bool Electroniccats_PN7150::configureSettings(void) {
 }
 
 // Deprecated, use configureSettings(void) instead
-bool Electroniccats_PN7150::ConfigureSettings(void) {
-  return Electroniccats_PN7150::configureSettings();
+bool PN7150::ConfigureSettings(void) {
+  return PN7150::configureSettings();
 }
 
-bool Electroniccats_PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
+bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
 #if NXP_CORE_CONF
   /* NCI standard dedicated settings
    * Refer to NFC Forum NCI standard for more details
@@ -919,15 +919,15 @@ bool Electroniccats_PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
 }
 
 // Deprecated, use configureSettings() instead
-bool Electroniccats_PN7150::ConfigureSettings(uint8_t *uidcf, uint8_t uidlen) {
-  return Electroniccats_PN7150::configureSettings(uidcf, uidlen);
+bool PN7150::ConfigureSettings(uint8_t *uidcf, uint8_t uidlen) {
+  return PN7150::configureSettings(uidcf, uidlen);
 }
 
-uint8_t Electroniccats_PN7150::StartDiscovery(uint8_t modeSE) {
-  int mode = Electroniccats_PN7150::getMode();
+uint8_t PN7150::StartDiscovery(uint8_t modeSE) {
+  int mode = PN7150::getMode();
   if (mode != modeSE) {
-    Electroniccats_PN7150::setMode(modeSE);
-    Electroniccats_PN7150::configMode();
+    PN7150::setMode(modeSE);
+    PN7150::configMode();
   }
 
   unsigned char TechTabSize = (modeSE == 1 ? sizeof(DiscoveryTechnologiesRW) : modeSE == 2 ? sizeof(DiscoveryTechnologiesCE)
@@ -955,12 +955,12 @@ uint8_t Electroniccats_PN7150::StartDiscovery(uint8_t modeSE) {
     return SUCCESS;
 }
 
-uint8_t Electroniccats_PN7150::startDiscovery() {
-  int mode = Electroniccats_PN7150::getMode();
-  return Electroniccats_PN7150::StartDiscovery(mode);
+uint8_t PN7150::startDiscovery() {
+  int mode = PN7150::getMode();
+  return PN7150::StartDiscovery(mode);
 }
 
-bool Electroniccats_PN7150::stopDiscovery() {
+bool PN7150::stopDiscovery() {
   uint8_t NCIStopDiscovery[] = {0x21, 0x06, 0x01, 0x00};
 
   (void)writeData(NCIStopDiscovery, sizeof(NCIStopDiscovery));
@@ -970,11 +970,11 @@ bool Electroniccats_PN7150::stopDiscovery() {
 }
 
 // Deprecated, use stopDiscovery() instead
-bool Electroniccats_PN7150::StopDiscovery() {
-  return Electroniccats_PN7150::stopDiscovery();
+bool PN7150::StopDiscovery() {
+  return PN7150::stopDiscovery();
 }
 
-bool Electroniccats_PN7150::WaitForDiscoveryNotification(RfIntf_t *pRfIntf, uint16_t tout) {
+bool PN7150::WaitForDiscoveryNotification(RfIntf_t *pRfIntf, uint16_t tout) {
   uint8_t NCIRfDiscoverSelect[] = {0x21, 0x04, 0x03, 0x01, protocol.ISODEP, interface.ISODEP};
 
   // P2P Support
@@ -1123,11 +1123,11 @@ wait:
   return SUCCESS;
 }
 
-bool Electroniccats_PN7150::isTagDetected(uint16_t tout) {
-  return !Electroniccats_PN7150::WaitForDiscoveryNotification(&this->dummyRfInterface, tout);
+bool PN7150::isTagDetected(uint16_t tout) {
+  return !PN7150::WaitForDiscoveryNotification(&this->dummyRfInterface, tout);
 }
 
-bool Electroniccats_PN7150::cardModeSend(unsigned char *pData, unsigned char DataSize) {
+bool PN7150::cardModeSend(unsigned char *pData, unsigned char DataSize) {
   bool status;
   uint8_t Cmd[MAX_NCI_FRAME_SIZE];
 
@@ -1141,11 +1141,11 @@ bool Electroniccats_PN7150::cardModeSend(unsigned char *pData, unsigned char Dat
 }
 
 // Deprecated, use cardModeSend() instead
-bool Electroniccats_PN7150::CardModeSend(unsigned char *pData, unsigned char DataSize) {
-  return Electroniccats_PN7150::cardModeSend(pData, DataSize);
+bool PN7150::CardModeSend(unsigned char *pData, unsigned char DataSize) {
+  return PN7150::cardModeSend(pData, DataSize);
 }
 
-bool Electroniccats_PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
+bool PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
 #ifdef DEBUG2
   Serial.println("[DEBUG] cardModeReceive exec");
 #endif
@@ -1173,11 +1173,11 @@ bool Electroniccats_PN7150::cardModeReceive(unsigned char *pData, unsigned char 
 }
 
 // Deprecated, use cardModeReceive() instead
-bool Electroniccats_PN7150::CardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
-  return Electroniccats_PN7150::cardModeReceive(pData, pDataSize);
+bool PN7150::CardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
+  return PN7150::cardModeReceive(pData, pDataSize);
 }
 
-void Electroniccats_PN7150::ProcessCardMode(RfIntf_t RfIntf) {
+void PN7150::ProcessCardMode(RfIntf_t RfIntf) {
   uint8_t Answer[MAX_NCI_FRAME_SIZE];
 
   uint8_t NCIStopDiscovery[] = {0x21, 0x06, 0x01, 0x00};
@@ -1225,11 +1225,11 @@ void Electroniccats_PN7150::ProcessCardMode(RfIntf_t RfIntf) {
   }
 }
 
-void Electroniccats_PN7150::handleCardEmulation() {
-  Electroniccats_PN7150::ProcessCardMode(this->dummyRfInterface);
+void PN7150::handleCardEmulation() {
+  PN7150::ProcessCardMode(this->dummyRfInterface);
 }
 
-void Electroniccats_PN7150::processReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation) {
+void PN7150::processReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation) {
   switch (Operation) {
     case READ_NDEF:
       readNdef(RfIntf);
@@ -1246,11 +1246,11 @@ void Electroniccats_PN7150::processReaderMode(RfIntf_t RfIntf, RW_Operation_t Op
 }
 
 // Deprecated, use processReaderMode() instead
-void Electroniccats_PN7150::ProcessReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation) {
-  Electroniccats_PN7150::processReaderMode(RfIntf, Operation);
+void PN7150::ProcessReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation) {
+  PN7150::processReaderMode(RfIntf, Operation);
 }
 
-void Electroniccats_PN7150::processP2pMode(RfIntf_t RfIntf) {
+void PN7150::processP2pMode(RfIntf_t RfIntf) {
   uint8_t status = ERROR;
   bool restart = false;
   uint8_t NCILlcpSymm[] = {0x00, 0x00, 0x02, 0x00, 0x00};
@@ -1338,11 +1338,11 @@ void Electroniccats_PN7150::processP2pMode(RfIntf_t RfIntf) {
 }
 
 // Deprecated, use processP2pMode() instead
-void Electroniccats_PN7150::ProcessP2pMode(RfIntf_t RfIntf) {
-  Electroniccats_PN7150::processP2pMode(RfIntf);
+void PN7150::ProcessP2pMode(RfIntf_t RfIntf) {
+  PN7150::processP2pMode(RfIntf);
 }
 
-void Electroniccats_PN7150::presenceCheck(RfIntf_t RfIntf) {
+void PN7150::presenceCheck(RfIntf_t RfIntf) {
   bool status;
   uint8_t i;
 
@@ -1427,16 +1427,16 @@ void Electroniccats_PN7150::presenceCheck(RfIntf_t RfIntf) {
   }
 }
 
-void Electroniccats_PN7150::waitForTagRemoval() {
-  Electroniccats_PN7150::presenceCheck(this->dummyRfInterface);
+void PN7150::waitForTagRemoval() {
+  PN7150::presenceCheck(this->dummyRfInterface);
 }
 
 // Deprecated, use waitForTagRemoval() instead
-void Electroniccats_PN7150::PresenceCheck(RfIntf_t RfIntf) {
-  Electroniccats_PN7150::presenceCheck(RfIntf);
+void PN7150::PresenceCheck(RfIntf_t RfIntf) {
+  PN7150::presenceCheck(RfIntf);
 }
 
-bool Electroniccats_PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize) {
+bool PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize) {
   bool status = ERROR;
   uint8_t Cmd[MAX_NCI_FRAME_SIZE];
 
@@ -1461,11 +1461,11 @@ bool Electroniccats_PN7150::readerTagCmd(unsigned char *pCommand, unsigned char 
 }
 
 // Deprecated, use readerTagCmd() instead
-bool Electroniccats_PN7150::ReaderTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize) {
-  return Electroniccats_PN7150::readerTagCmd(pCommand, CommandSize, pAnswer, pAnswerSize);
+bool PN7150::ReaderTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize) {
+  return PN7150::readerTagCmd(pCommand, CommandSize, pAnswer, pAnswerSize);
 }
 
-bool Electroniccats_PN7150::readerReActivate() {
+bool PN7150::readerReActivate() {
   uint8_t NCIDeactivate[] = {0x21, 0x06, 0x01, 0x01};
   uint8_t NCIActivate[] = {0x21, 0x04, 0x03, 0x01, 0x00, 0x00};
 
@@ -1488,11 +1488,11 @@ bool Electroniccats_PN7150::readerReActivate() {
 }
 
 // Deprecated, use readerReActivate() instead
-bool Electroniccats_PN7150::ReaderReActivate(RfIntf_t *pRfIntf) {
-  return Electroniccats_PN7150::readerReActivate();
+bool PN7150::ReaderReActivate(RfIntf_t *pRfIntf) {
+  return PN7150::readerReActivate();
 }
 
-bool Electroniccats_PN7150::ReaderActivateNext(RfIntf_t *pRfIntf) {
+bool PN7150::ReaderActivateNext(RfIntf_t *pRfIntf) {
   uint8_t NCIStopDiscovery[] = {0x21, 0x06, 0x01, 0x01};
   uint8_t NCIRfDiscoverSelect[] = {0x21, 0x04, 0x03, 0x02, PROT_ISODEP, INTF_ISODEP};
 
@@ -1550,11 +1550,11 @@ bool Electroniccats_PN7150::ReaderActivateNext(RfIntf_t *pRfIntf) {
   return status;
 }
 
-bool Electroniccats_PN7150::activateNextTagDiscovery() {
-  return !Electroniccats_PN7150::ReaderActivateNext(&this->dummyRfInterface);
+bool PN7150::activateNextTagDiscovery() {
+  return !PN7150::ReaderActivateNext(&this->dummyRfInterface);
 }
 
-void Electroniccats_PN7150::readNdef(RfIntf_t RfIntf) {
+void PN7150::readNdef(RfIntf_t RfIntf) {
   uint8_t Cmd[MAX_NCI_FRAME_SIZE];
   uint16_t CmdSize = 0;
 
@@ -1594,16 +1594,16 @@ void Electroniccats_PN7150::readNdef(RfIntf_t RfIntf) {
   }
 }
 
-void Electroniccats_PN7150::readNdefMessage(void) {
-  Electroniccats_PN7150::readNdef(this->dummyRfInterface);
+void PN7150::readNdefMessage(void) {
+  PN7150::readNdef(this->dummyRfInterface);
 }
 
 // Deprecated, use readNdef() instead
-void Electroniccats_PN7150::ReadNdef(RfIntf_t RfIntf) {
-  Electroniccats_PN7150::readNdef(RfIntf);
+void PN7150::ReadNdef(RfIntf_t RfIntf) {
+  PN7150::readNdef(RfIntf);
 }
 
-void Electroniccats_PN7150::writeNdef(RfIntf_t RfIntf) {
+void PN7150::writeNdef(RfIntf_t RfIntf) {
   uint8_t Cmd[MAX_NCI_FRAME_SIZE];
   uint16_t CmdSize = 0;
 
@@ -1627,16 +1627,16 @@ void Electroniccats_PN7150::writeNdef(RfIntf_t RfIntf) {
   }
 }
 
-void Electroniccats_PN7150::writeNdefMessage(void) {
-  Electroniccats_PN7150::writeNdef(this->dummyRfInterface);
+void PN7150::writeNdefMessage(void) {
+  PN7150::writeNdef(this->dummyRfInterface);
 }
 
 // Deprecated, use writeNdefMessage() instead
-void Electroniccats_PN7150::WriteNdef(RfIntf_t RfIntf) {
-  Electroniccats_PN7150::writeNdef(RfIntf);
+void PN7150::WriteNdef(RfIntf_t RfIntf) {
+  PN7150::writeNdef(RfIntf);
 }
 
-bool Electroniccats_PN7150::nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
+bool PN7150::nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
   uint8_t NCIPrbs_1stGen[] = {0x2F, 0x30, 0x04, 0x00, 0x00, 0x01, 0x01};
   uint8_t NCIPrbs_2ndGen[] = {0x2F, 0x30, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01};
   uint8_t *NxpNci_cmd;
@@ -1667,11 +1667,11 @@ bool Electroniccats_PN7150::nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bi
 }
 
 // Deprecated, use nciFactoryTestPrbs instead
-bool Electroniccats_PN7150::NxpNci_FactoryTest_Prbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
-  return Electroniccats_PN7150::nciFactoryTestPrbs(type, bitrate);
+bool PN7150::NxpNci_FactoryTest_Prbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
+  return PN7150::nciFactoryTestPrbs(type, bitrate);
 }
 
-bool Electroniccats_PN7150::nciFactoryTestRfOn() {
+bool PN7150::nciFactoryTestRfOn() {
   uint8_t NCIRfOn[] = {0x2F, 0x3D, 0x02, 0x20, 0x01};
 
   (void)writeData(NCIRfOn, sizeof(NCIRfOn));
@@ -1683,66 +1683,66 @@ bool Electroniccats_PN7150::nciFactoryTestRfOn() {
 }
 
 // Deprecated, use nciFactoryTestRfOn instead
-bool Electroniccats_PN7150::NxpNci_FactoryTest_RfOn() {
-  return Electroniccats_PN7150::nciFactoryTestRfOn();
+bool PN7150::NxpNci_FactoryTest_RfOn() {
+  return PN7150::nciFactoryTestRfOn();
 }
 
-bool Electroniccats_PN7150::reset() {
-  if (Electroniccats_PN7150::stopDiscovery()) {
+bool PN7150::reset() {
+  if (PN7150::stopDiscovery()) {
     return false;
   }
 
   // Configure settings only if we have not detected a tag yet
   if (remoteDevice.getProtocol() == protocol.UNDETERMINED) {
-    if (Electroniccats_PN7150::configureSettings()) {
+    if (PN7150::configureSettings()) {
       return false;
     }
   }
 
-  if (Electroniccats_PN7150::configMode()) {
+  if (PN7150::configMode()) {
     return false;
   }
 
-  if (Electroniccats_PN7150::startDiscovery()) {
+  if (PN7150::startDiscovery()) {
     return false;
   }
 
   return true;
 }
 
-bool Electroniccats_PN7150::setReaderWriterMode() {
-  Electroniccats_PN7150::setMode(mode.READER_WRITER);
-  if (!Electroniccats_PN7150::reset()) {
+bool PN7150::setReaderWriterMode() {
+  PN7150::setMode(mode.READER_WRITER);
+  if (!PN7150::reset()) {
     return false;
   }
   return true;
 }
 
-bool Electroniccats_PN7150::setEmulationMode() {
-  Electroniccats_PN7150::setMode(mode.EMULATION);
-  if (!Electroniccats_PN7150::reset()) {
+bool PN7150::setEmulationMode() {
+  PN7150::setMode(mode.EMULATION);
+  if (!PN7150::reset()) {
     return false;
   }
   return true;
 }
 
-bool Electroniccats_PN7150::setP2PMode() {
-  Electroniccats_PN7150::setMode(mode.P2P);
-  if (!Electroniccats_PN7150::reset()) {
+bool PN7150::setP2PMode() {
+  PN7150::setMode(mode.P2P);
+  if (!PN7150::reset()) {
     return false;
   }
   return true;
 }
 
-void Electroniccats_PN7150::setReadMsgCallback(CustomCallback_t function) {
+void PN7150::setReadMsgCallback(CustomCallback_t function) {
   registerNdefReceivedCallback(function);
 }
 
-void Electroniccats_PN7150::setSendMsgCallback(CustomCallback_t function) {
+void PN7150::setSendMsgCallback(CustomCallback_t function) {
   T4T_NDEF_EMU_SetCallback(function);
 }
 
-bool Electroniccats_PN7150::isReaderDetected() {
+bool PN7150::isReaderDetected() {
   static unsigned char STATUSOK[] = {0x90, 0x00}, Cmd[256], CmdSize;
   bool status = false;
 
@@ -1751,19 +1751,19 @@ bool Electroniccats_PN7150::isReaderDetected() {
       if (Cmd[1] == 0xA4) {
         status = true;
       }
-      Electroniccats_PN7150::closeCommunication();
+      PN7150::closeCommunication();
     }
   }
 
   return status;
 }
 
-void Electroniccats_PN7150::closeCommunication() {
+void PN7150::closeCommunication() {
   unsigned char STATUSOK[] = {0x90, 0x00};
-  Electroniccats_PN7150::cardModeSend(STATUSOK, sizeof(STATUSOK));
+  PN7150::cardModeSend(STATUSOK, sizeof(STATUSOK));
 }
 
-void Electroniccats_PN7150::sendMessage() {
-  Electroniccats_PN7150::handleCardEmulation();
-  Electroniccats_PN7150::closeCommunication();
+void PN7150::sendMessage() {
+  PN7150::handleCardEmulation();
+  PN7150::closeCommunication();
 }
