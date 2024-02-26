@@ -239,11 +239,6 @@ int PN7150::getFirmwareVersion() {
   return ((gNfcController_fw_version[0] & 0xFF) << 16) | ((gNfcController_fw_version[1] & 0xFF) << 8) | (gNfcController_fw_version[2] & 0xFF);
 }
 
-// Deprecated, use getFirmwareVersion() instead
-int PN7150::GetFwVersion() {
-  return getFirmwareVersion();
-}
-
 uint8_t PN7150::connectNCI() {
   uint8_t i = 2;
   uint8_t NCICoreInit[] = {0x20, 0x01, 0x00};
@@ -677,11 +672,6 @@ bool PN7150::configureSettings(void) {
   return SUCCESS;
 }
 
-// Deprecated, use configureSettings(void) instead
-bool PN7150::ConfigureSettings(void) {
-  return PN7150::configureSettings();
-}
-
 bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
 #if NXP_CORE_CONF
   /* NCI standard dedicated settings
@@ -957,11 +947,6 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
   return SUCCESS;
 }
 
-// Deprecated, use configureSettings() instead
-bool PN7150::ConfigureSettings(uint8_t *uidcf, uint8_t uidlen) {
-  return PN7150::configureSettings(uidcf, uidlen);
-}
-
 uint8_t PN7150::StartDiscovery(uint8_t modeSE) {
   int mode = PN7150::getMode();
   if (mode != modeSE) {
@@ -1006,11 +991,6 @@ bool PN7150::stopDiscovery() {
   getMessage(10);
 
   return SUCCESS;
-}
-
-// Deprecated, use stopDiscovery() instead
-bool PN7150::StopDiscovery() {
-  return PN7150::stopDiscovery();
 }
 
 bool PN7150::WaitForDiscoveryNotification(RfIntf_t *pRfIntf, uint16_t tout) {
@@ -1179,11 +1159,6 @@ bool PN7150::cardModeSend(unsigned char *pData, unsigned char DataSize) {
   return status;
 }
 
-// Deprecated, use cardModeSend() instead
-bool PN7150::CardModeSend(unsigned char *pData, unsigned char DataSize) {
-  return PN7150::cardModeSend(pData, DataSize);
-}
-
 bool PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
 #ifdef DEBUG2
   Serial.println("[DEBUG] cardModeReceive exec");
@@ -1209,11 +1184,6 @@ bool PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
     status = NFC_ERROR;
   }
   return status;
-}
-
-// Deprecated, use cardModeReceive() instead
-bool PN7150::CardModeReceive(unsigned char *pData, unsigned char *pDataSize) {
-  return PN7150::cardModeReceive(pData, pDataSize);
 }
 
 void PN7150::ProcessCardMode(RfIntf_t RfIntf) {
@@ -1282,11 +1252,6 @@ void PN7150::processReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation) {
     default:
       break;
   }
-}
-
-// Deprecated, use processReaderMode() instead
-void PN7150::ProcessReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation) {
-  PN7150::processReaderMode(RfIntf, Operation);
 }
 
 void PN7150::processP2pMode(RfIntf_t RfIntf) {
@@ -1374,11 +1339,6 @@ void PN7150::processP2pMode(RfIntf_t RfIntf) {
     getMessage();
     getMessage(100);
   }
-}
-
-// Deprecated, use processP2pMode() instead
-void PN7150::ProcessP2pMode(RfIntf_t RfIntf) {
-  PN7150::processP2pMode(RfIntf);
 }
 
 void PN7150::presenceCheck(RfIntf_t RfIntf) {
@@ -1470,11 +1430,6 @@ void PN7150::waitForTagRemoval() {
   PN7150::presenceCheck(this->dummyRfInterface);
 }
 
-// Deprecated, use waitForTagRemoval() instead
-void PN7150::PresenceCheck(RfIntf_t RfIntf) {
-  PN7150::presenceCheck(RfIntf);
-}
-
 bool PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize) {
   bool status = ERROR;
   uint8_t Cmd[MAX_NCI_FRAME_SIZE];
@@ -1499,11 +1454,6 @@ bool PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, un
   return status;
 }
 
-// Deprecated, use readerTagCmd() instead
-bool PN7150::ReaderTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize) {
-  return PN7150::readerTagCmd(pCommand, CommandSize, pAnswer, pAnswerSize);
-}
-
 bool PN7150::readerReActivate() {
   uint8_t NCIDeactivate[] = {0x21, 0x06, 0x01, 0x01};
   uint8_t NCIActivate[] = {0x21, 0x04, 0x03, 0x01, 0x00, 0x00};
@@ -1524,11 +1474,6 @@ bool PN7150::readerReActivate() {
   if ((rxBuffer[0] != 0x61) || (rxBuffer[1] != 0x05))
     return ERROR;
   return SUCCESS;
-}
-
-// Deprecated, use readerReActivate() instead
-bool PN7150::ReaderReActivate(RfIntf_t *pRfIntf) {
-  return PN7150::readerReActivate();
 }
 
 bool PN7150::ReaderActivateNext(RfIntf_t *pRfIntf) {
@@ -1637,11 +1582,6 @@ void PN7150::readNdefMessage(void) {
   PN7150::readNdef(this->dummyRfInterface);
 }
 
-// Deprecated, use readNdef() instead
-void PN7150::ReadNdef(RfIntf_t RfIntf) {
-  PN7150::readNdef(RfIntf);
-}
-
 void PN7150::writeNdef(RfIntf_t RfIntf) {
   uint8_t Cmd[MAX_NCI_FRAME_SIZE];
   uint16_t CmdSize = 0;
@@ -1668,11 +1608,6 @@ void PN7150::writeNdef(RfIntf_t RfIntf) {
 
 void PN7150::writeNdefMessage(void) {
   PN7150::writeNdef(this->dummyRfInterface);
-}
-
-// Deprecated, use writeNdefMessage() instead
-void PN7150::WriteNdef(RfIntf_t RfIntf) {
-  PN7150::writeNdef(RfIntf);
 }
 
 bool PN7150::nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
@@ -1705,11 +1640,6 @@ bool PN7150::nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate
   return SUCCESS;
 }
 
-// Deprecated, use nciFactoryTestPrbs instead
-bool PN7150::NxpNci_FactoryTest_Prbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
-  return PN7150::nciFactoryTestPrbs(type, bitrate);
-}
-
 bool PN7150::nciFactoryTestRfOn() {
   uint8_t NCIRfOn[] = {0x2F, 0x3D, 0x02, 0x20, 0x01};
 
@@ -1719,11 +1649,6 @@ bool PN7150::nciFactoryTestRfOn() {
     return ERROR;
 
   return SUCCESS;
-}
-
-// Deprecated, use nciFactoryTestRfOn instead
-bool PN7150::NxpNci_FactoryTest_RfOn() {
-  return PN7150::nciFactoryTestRfOn();
 }
 
 bool PN7150::reset() {

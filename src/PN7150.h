@@ -127,7 +127,6 @@ class PN7150 : public Mode {
   uint8_t writeData(uint8_t data[], uint32_t dataLength) const;  // write data from DeviceHost to PN7150. Returns success (0) or Fail (> 0)
   uint32_t readData(uint8_t data[]) const;                       // read data from PN7150, returns the amount of bytes read
   int getFirmwareVersion();
-  int GetFwVersion();  // Deprecated, use getFirmwareVersion() instead
   uint8_t connectNCI();
   uint8_t ConfigMode(uint8_t modeSE);  // Deprecated, use configMode(void) instead
   uint8_t configMode(void);
@@ -135,44 +134,30 @@ class PN7150 : public Mode {
   bool setEmulationMode();
   bool setP2PMode();
   bool configureSettings(void);
-  bool ConfigureSettings(void);  // Deprecated, use configureSettings(void) instead
   bool configureSettings(uint8_t *nfcuid, uint8_t uidlen);
-  bool ConfigureSettings(uint8_t *nfcuid, uint8_t uidlen);  // Deprecated, use configureSettings() instead
   uint8_t startDiscovery();
   uint8_t StartDiscovery(uint8_t modeSE);  // Deprecated, use startDiscovery() instead
   bool stopDiscovery();
-  bool StopDiscovery();                                                     // Deprecated, use stopDiscovery() instead
   bool WaitForDiscoveryNotification(RfIntf_t *pRfIntf, uint16_t tout = 0);  // Deprecated, use isTagDetected() instead
   bool isTagDetected(uint16_t tout = 500);
   bool cardModeSend(unsigned char *pData, unsigned char DataSize);
-  bool CardModeSend(unsigned char *pData, unsigned char DataSize);  // Deprecated, use cardModeSend() instead
   bool cardModeReceive(unsigned char *pData, unsigned char *pDataSize);
-  bool CardModeReceive(unsigned char *pData, unsigned char *pDataSize);  // Deprecated, use cardModeReceive() instead
   void handleCardEmulation();
   void ProcessCardMode(RfIntf_t RfIntf);                              // Deprecated, use handleCardEmulation() instead
   void processReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation);  // Deprecated, use waitForTagRemoval(), readNdefMessage() or writeNdefMessage() and readNdefMessage() instead
-  void ProcessReaderMode(RfIntf_t RfIntf, RW_Operation_t Operation);  // Deprecated, use processReaderMode() instead
   void processP2pMode(RfIntf_t RfIntf);                               // TODO: rename it
-  void ProcessP2pMode(RfIntf_t RfIntf);                               // Deprecated, use processP2pMode() instead
   void presenceCheck(RfIntf_t RfIntf);                                // Deprecated, use waitForTagRemoval() instead
-  void PresenceCheck(RfIntf_t RfIntf);                                // Deprecated, use waitForTagRemoval() instead
   void waitForTagRemoval();
   bool readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize);
-  bool ReaderTagCmd(unsigned char *pCommand, unsigned char CommandSize, unsigned char *pAnswer, unsigned char *pAnswerSize);  // Deprecated, use readerTagCmd() instead
   bool readerReActivate();
-  bool ReaderReActivate(RfIntf_t *pRfIntf);          // Deprecated, use readerReActivate() instead
   bool activateNextTagDiscovery();
   bool ReaderActivateNext(RfIntf_t *pRfIntf);        // Deprecated, use activateNextTagDiscovery() instead
   void readNdef(RfIntf_t RfIntf);  // TODO: remove it
   void readNdefMessage();
-  void ReadNdef(RfIntf_t RfIntf);   // Deprecated, use readNdefMessage() instead
   void writeNdef(RfIntf_t RfIntf);  // TODO: remove it
   void writeNdefMessage();
-  void WriteNdef(RfIntf_t RfIntf);  // Deprecated, use writeNdefMessage() instead
   bool nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate);
-  bool NxpNci_FactoryTest_Prbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate);  // Deprecated, use nciFactoryTestPrbs() instead
   bool nciFactoryTestRfOn();
-  bool NxpNci_FactoryTest_RfOn();  // Deprecated, use nciFactoryTestRfOn() instead
   bool reset();
   void setReadMsgCallback(std::function<void()> function);
   void setSendMsgCallback(CustomCallback_t function);
