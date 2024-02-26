@@ -12,6 +12,7 @@
  *                          arising from its use.
  */
 #include <Arduino.h>
+#include <functional>
 
 #define RW_MAX_NDEF_FILE_SIZE 500
 
@@ -32,7 +33,7 @@ extern unsigned short RW_NdefMessage_size;
 extern RW_NDEF_Callback_t *pRW_NDEF_PullCb;
 extern RW_NDEF_Callback_t *pRW_NDEF_PushCb;
 extern RW_NDEF_Callback_t *updateNdefMessageCallback;
-extern CustomCallback_t *ndefReceivedCallback;
+extern std::function<void()> ndefReceivedCallback;
 
 void RW_NDEF_Reset(unsigned char type);
 void RW_NDEF_Read_Next(unsigned char *pCmd, unsigned short Cmd_size, unsigned char *Rsp, unsigned short *pRsp_size);
@@ -40,4 +41,4 @@ void RW_NDEF_Write_Next(unsigned char *pCmd, unsigned short Cmd_size, unsigned c
 bool RW_NDEF_SetMessage(unsigned char *pMessage, unsigned short Message_size, void *pCb);
 void RW_NDEF_RegisterPullCallback(void *pCb);
 void registerUpdateNdefMessageCallback(RW_NDEF_Callback_t function);
-void registerNdefReceivedCallback(CustomCallback_t function);
+void registerNdefReceivedCallback(std::function<void()> function);

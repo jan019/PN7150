@@ -19,6 +19,7 @@
 #include "RW_NDEF_T2T.h"
 #include "RW_NDEF_T3T.h"
 #include "RW_NDEF_T4T.h"
+#include <functional>
 
 /* Allocate buffer for NDEF operations */
 unsigned char NdefBuffer[RW_MAX_NDEF_FILE_SIZE];
@@ -31,7 +32,7 @@ unsigned short RW_NdefMessage_size;
 RW_NDEF_Callback_t *pRW_NDEF_PullCb;
 RW_NDEF_Callback_t *pRW_NDEF_PushCb;
 RW_NDEF_Callback_t *updateNdefMessageCallback;
-CustomCallback_t *ndefReceivedCallback;
+std::function<void()> ndefReceivedCallback;
 
 static RW_NDEF_Fct_t *pReadFct = NULL;
 static RW_NDEF_Fct_t *pWriteFct = NULL;
@@ -57,7 +58,7 @@ void registerUpdateNdefMessageCallback(RW_NDEF_Callback_t function) {
   updateNdefMessageCallback = function;
 }
 
-void registerNdefReceivedCallback(CustomCallback_t function) {
+void registerNdefReceivedCallback(std::function<void()> function) {
   ndefReceivedCallback = function;
 }
 

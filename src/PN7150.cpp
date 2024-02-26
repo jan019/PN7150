@@ -1773,7 +1773,7 @@ bool PN7150::setP2PMode() {
   return true;
 }
 
-void PN7150::setReadMsgCallback(CustomCallback_t function) {
+void PN7150::setReadMsgCallback(std::function<void()> function) {
   registerNdefReceivedCallback(function);
 }
 

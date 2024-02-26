@@ -174,7 +174,7 @@ class PN7150 : public Mode {
   bool nciFactoryTestRfOn();
   bool NxpNci_FactoryTest_RfOn();  // Deprecated, use nciFactoryTestRfOn() instead
   bool reset();
-  void setReadMsgCallback(CustomCallback_t function);
+  void setReadMsgCallback(std::function<void()> function);
   void setSendMsgCallback(CustomCallback_t function);
   bool isReaderDetected();
   void closeCommunication();
