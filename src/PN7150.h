@@ -27,11 +27,7 @@
 #include "RemoteDevice.h"
 #include "T4T_NDEF_emu.h"
 
-#if defined(TEENSYDUINO) && defined(KINETISK)  // Teensy 3.0, 3.1, 3.2, 3.5, 3.6 :  Special, more optimized I2C library for Teensy boards
-#include <i2c_t3.h>                            // Credits Brian "nox771" : see https://forum.pjrc.com/threads/21680-New-I2C-library-for-Teensy3
-#else
 #include <Wire.h>
-#endif
 
 #define NO_PN7150_RESET_PIN 255
 /* Following definitions specifies which settings will apply when NxpNci_ConfigureSettings()
@@ -48,10 +44,9 @@
 
 #define NFC_SUCCESS 0
 #define NFC_ERROR 1
-#define TIMEOUT_2S 2000
 #define SUCCESS NFC_SUCCESS
 #define ERROR NFC_ERROR
-#define MAX_NCI_FRAME_SIZE 258
+constexpr uint16_t MAX_NCI_FRAME_SIZE = 258;
 
 /*
  * Flag definition used for NFC library configuration
@@ -60,8 +55,8 @@
 #define MODE_P2P (1 << 1)
 #define MODE_RW (1 << 2)
 
-#define MaxPayloadSize 255  // See NCI specification V1.0, section 3.1
-#define MsgHeaderSize 3
+constexpr uint8_t MaxPayloadSize = 255;  // See NCI specification V1.0, section 3.1
+constexpr uint8_t MsgHeaderSize = 3;
 
 /***** Factory Test dedicated APIs *********************************************/
 #ifdef NFC_FACTORY_TEST
