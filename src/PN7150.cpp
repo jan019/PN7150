@@ -152,12 +152,14 @@ uint8_t PN7150::writeData(uint8_t txBuffer[], uint32_t txBufferLevel) const {
   uint32_t nmbrBytesWritten = 0;
   _wire->beginTransmission((uint8_t)_I2Caddress);                      // configura transmision
   nmbrBytesWritten = _wire->write(txBuffer, (size_t)(txBufferLevel));  // carga en buffer
+  delay(10);
 #ifdef DEBUG2
   Serial.println("[DEBUG] written bytes = 0x" + String(nmbrBytesWritten, HEX));
 #endif
   if (nmbrBytesWritten == txBufferLevel) {
     byte resultCode;
     resultCode = _wire->endTransmission();  // envio de datos segun yo
+    delay(10);
 #ifdef DEBUG2
     Serial.println("[DEBUG] write data code = 0x" + String(resultCode, HEX));
 #endif
@@ -173,12 +175,30 @@ uint32_t PN7150::readData(uint8_t rxBuffer[]) const {
     bytesReceived = _wire->requestFrom(_I2Caddress, (uint8_t)3);  // first reading the header, as this contains how long the payload will be
 // Imprimir datos de bytes received, tratar de extraer con funcion read
 // Leer e inyectar directo al buffer los siguientes 3
+    delay(10);
 #ifdef DEBUG2
     Serial.println("[DEBUG] bytesReceived = 0x" + String(bytesReceived, HEX));
 #endif
-    rxBuffer[0] = _wire->read();
-    rxBuffer[1] = _wire->read();
-    rxBuffer[2] = _wire->read();
+    int byte0 = _wire->read();
+    int byte1 = _wire->read();
+    int byte2 = _wire->read();
+
+    if (byte0 == -1 || byte1 == -1 || byte2 == -1)
+    {
+        delay(10);
+        #ifdef DEBUG2
+        Serial.println("[DEBUG] Error reading bytes");
+        Serial.println("[DEBUG] byte0: 0x" + String(byte0, HEX));
+        Serial.println("[DEBUG] byte1: 0x" + String(byte1, HEX));
+        Serial.println("[DEBUG] byte2: 0x" + String(byte2, HEX));
+        #endif
+        return 0;
+    }
+
+    rxBuffer[0] = byte0;
+    rxBuffer[1] = byte1;
+    rxBuffer[2] = byte2;
+    delay(10);
 #ifdef DEBUG2
     for (int i = 0; i < 3; i++) {
       Serial.println("[DEBUG] Byte[" + String(i) + "] = 0x" + String(rxBuffer[i], HEX));
@@ -187,12 +207,21 @@ uint32_t PN7150::readData(uint8_t rxBuffer[]) const {
     uint8_t payloadLength = rxBuffer[2];
     if (payloadLength > 0) {
       bytesReceived += _wire->requestFrom(_I2Caddress, (uint8_t)payloadLength);  // then reading the payload, if any
+      delay(10);
 #ifdef DEBUG2
       Serial.println("[DEBUG] payload bytes = 0x" + String(bytesReceived - 3, HEX));
 #endif
       uint32_t index = 3;
       while (index < bytesReceived) {
-        rxBuffer[index] = _wire->read();
+        int byte = _wire->read();
+        if (byte == -1)
+        {
+            Serial.println("[DEBUG] Error reading byte");
+            Serial.println("[DEBUG] byte: 0x" + String(byte, HEX));
+            return 0;
+        }
+        rxBuffer[index] = byte;
+        delay(10);
 #ifdef DEBUG2
         Serial.println("[DEBUG] payload[" + String(index) + "] = 0x" + String(rxBuffer[index], HEX));
 #endif
