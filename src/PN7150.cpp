@@ -46,6 +46,9 @@ unsigned char DiscoveryTechnologiesP2P[] = {  // P2P
     MODE_LISTEN | TECH_ACTIVE_NFCA,
     MODE_LISTEN | TECH_ACTIVE_NFCF};
 
+const uint8_t NCICoreReset[] = {0x20, 0x00, 0x01, 0x00}; // CORE_RESET_CMD - 0x00: Reset NCI (keep configuration), 0x01: Reset NCI (restore default configuration), JG: command checked, ok.
+const uint8_t NCICoreInit[] = {0x20, 0x01, 0x00}; // CORE_INIT_CMD - empty payload; JG: command checked, ok.
+
 PN7150::PN7150(uint8_t IRQpin, uint8_t VENpin,
                                              uint8_t I2Caddress, TwoWire *wire) : _IRQpin(IRQpin), _VENpin(VENpin), _I2Caddress(I2Caddress), _wire(wire) {
   pinMode(_IRQpin, INPUT);
@@ -107,11 +110,11 @@ void PN7150::setTimeOut(unsigned long theTimeOut) {
 }
 
 uint8_t PN7150::wakeupNCI() {  // the device has to wake up using a core reset
-  uint8_t NCICoreReset[] = {0x20, 0x00, 0x01, 0x01};
+  //uint8_t NCICoreReset[] = {0x20, 0x00, 0x01, 0x01}; // TODO: I now defined NCICoreReset at global scope, it is however with 0x00 (only reset, keep config). Why was this with reset config, makes no sense?
   uint16_t NbBytes = 0;
 
   // Reset RF settings restauration flag
-  (void)writeData(NCICoreReset, 4);
+  (void)writeData(NCICoreReset, sizeof(NCICoreReset));
   getMessage(15);
   NbBytes = rxMessageLength;
   if ((NbBytes == 0) || (rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x00)) {
@@ -132,6 +135,7 @@ uint8_t PN7150::wakeupNCI() {  // the device has to wake up using a core reset
   return SUCCESS;
 }
 
+// TODO: the magic number 1337 sets and inifite loop (called in one place), this is not accceptable. Remove it.
 bool PN7150::getMessage(uint16_t timeout) {  // check for message using timeout, 5 milisec as default
   setTimeOut(timeout);
   rxMessageLength = 0;
@@ -149,10 +153,10 @@ bool PN7150::hasMessage() const {
   return (HIGH == digitalRead(_IRQpin));  // PN7150 indicates it has data by driving IRQ signal HIGH
 }
 
-uint8_t PN7150::writeData(uint8_t txBuffer[], uint32_t txBufferLevel) const {
+uint8_t PN7150::writeData(const uint8_t txBuffer[], uint32_t txBufferLevel) const {
   uint32_t nmbrBytesWritten = 0;
-  _wire->beginTransmission((uint8_t)_I2Caddress);                      // configura transmision
-  nmbrBytesWritten = _wire->write(txBuffer, (size_t)(txBufferLevel));  // carga en buffer
+  _wire->beginTransmission(_I2Caddress);
+  nmbrBytesWritten = _wire->write(txBuffer, (size_t)(txBufferLevel));
   delay(10);
 #ifdef DEBUG2
   Serial.println("[DEBUG] written bytes = 0x" + String(nmbrBytesWritten, HEX));
@@ -510,8 +514,6 @@ bool PN7150::configureSettings(void) {
 #endif
 #endif
 
-  uint8_t NCICoreReset[] = {0x20, 0x00, 0x01, 0x00};
-  uint8_t NCICoreInit[] = {0x20, 0x01, 0x00};
   bool gRfSettingsRestored_flag = false;
 
 #if (NXP_TVDD_CONF | NXP_RF_CONF)
@@ -520,8 +522,10 @@ bool PN7150::configureSettings(void) {
 #endif
 #if (NXP_CORE_CONF_EXTN | NXP_CLK_CONF | NXP_TVDD_CONF | NXP_RF_CONF)
   uint8_t currentTS[32] = __TIMESTAMP__;
-  uint8_t NCIReadTS[] = {0x20, 0x03, 0x03, 0x01, 0xA0, 0x14};
-  uint8_t NCIWriteTS[7 + 32] = {0x20, 0x02, 0x24, 0x01, 0xA0, 0x14, 0x20};
+  uint8_t NCIReadTS[] = {0x20, 0x03, 0x03, 0x01, 0xA0, 0x14}; // CORE_GET_CONFIG_CMD - (NXP extended) read EEPROM; DH_EEPROM_AREA_2 - 32-Byte EEPROM area dedicated to the DH to store/retrieve non-volatile data. JG: command checked, ok.
+  uint8_t NCIWriteTS[7 + 32] = {0x20, 0x02, 0x24, 0x01, 0xA0, 0x14, 0x20}; // CORE_SET_CONFIG_CMD - (NXP extended) write 32 bytes (0x20) to EEPROM; DH_EEPROM_AREA_2
+  // 7 + 32 because 7 is the length of the command and 32 is the length of the timestamp
+  // JG: both command checked, ok.
 #endif
   bool isResetRequired = false;
 
@@ -566,13 +570,14 @@ bool PN7150::configureSettings(void) {
     return ERROR;
   }
   /* Then compare with current build timestamp, and check RF setting restauration flag */
-  /*if(!memcmp(&rxBuffer[8], currentTS, sizeof(currentTS)) && (gRfSettingsRestored_flag == false))
+  // TODO: This was commented out, why?
+  if(!memcmp(&rxBuffer[8], currentTS, sizeof(currentTS)) && (gRfSettingsRestored_flag == false))
   {
       // No change, nothing to do
   }
   else
   {
-      */
+
   /* Apply settings */
 #if NXP_CORE_CONF_EXTN
   if (sizeof(NxpNci_CORE_CONF_EXTN) != 0) {
@@ -593,7 +598,6 @@ bool PN7150::configureSettings(void) {
 
     (void)writeData(NxpNci_CLK_CONF, sizeof(NxpNci_CLK_CONF));
     getMessage(10);
-    // NxpNci_HostTransceive(NxpNci_CLK_CONF, sizeof(NxpNci_CLK_CONF), Answer, sizeof(Answer), &AnswerSize);
     if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00) || (rxBuffer[4] != 0x00)) {
 #ifdef DEBUG
       Serial.println("NxpNci_CLK_CONF");
@@ -638,7 +642,7 @@ bool PN7150::configureSettings(void) {
 #endif
     return ERROR;
   }
-  //}
+  }
 #endif
 
   if (isResetRequired) {

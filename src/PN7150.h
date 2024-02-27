@@ -118,7 +118,7 @@ class PN7150 : public Mode {
   ModeTech modeTech;
   Interface interface;
   bool hasMessage() const;
-  uint8_t writeData(uint8_t data[], uint32_t dataLength) const;  // write data from DeviceHost to PN7150. Returns success (0) or Fail (> 0)
+  uint8_t writeData(const uint8_t data[], uint32_t dataLength) const;  // write data from DeviceHost to PN7150. Returns success (0) or Fail (> 0)
   uint32_t readData(uint8_t data[]) const;                       // read data from PN7150, returns the amount of bytes read
   int getFirmwareVersion();
   uint8_t connectNCI();
