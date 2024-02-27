@@ -464,6 +464,7 @@ bool PN7150::configureSettings(void) {
    */
   /* RF configuration related to 2nd generation of NXP-NCI controller (e.g PN7150)*/
   /* Following configuration relates to performance optimization of OM5578/PN7150 NFC Controller demo kit */
+  /* Avoid mixing RF Transition parameters with other parameters (not starting with address 0xA00D) in a same CORE_SET_CONFIG_CMD command */
   uint8_t NxpNci_RF_CONF[] = {
       0x20, 0x02, 0x94, 0x11,
       0xA0, 0x0D, 0x06, 0x04, 0x35, 0x90, 0x01, 0xF4, 0x01, /* RF_CLIF_CFG_INITIATOR        CLIF_AGC_INPUT_REG */
@@ -484,6 +485,7 @@ bool PN7150::configureSettings(void) {
       0xA0, 0x0D, 0x06, 0x54, 0x42, 0x88, 0x00, 0xFF, 0xFF, /* RF_CLIF_CFG_BR_212_I_TXF     CLIF_ANA_TX_AMPLITUDE_REG */
       0xA0, 0x0D, 0x06, 0x0A, 0x33, 0x80, 0x86, 0x00, 0x70  /* RF_CLIF_CFG_I_ACTIVE         CLIF_AGC_CONFIG0_REG */
   };
+  // JG: The settings of these parameters need to be changed according to measurements. This will be done for the final release, not the testing
 #endif
 
 #if NXP_CLK_CONF
@@ -495,7 +497,9 @@ bool PN7150::configureSettings(void) {
   uint8_t NxpNci_CLK_CONF[] = {
       0x20, 0x02, 0x05, 0x01, /* CORE_SET_CONFIG_CMD */
       0xA0, 0x03, 0x01, 0x08  /* CLOCK_SEL_CFG */
+      // JG: command checked, ok.
   };
+
 #else
   /* PLL configuration */
   uint8_t NxpNci_CLK_CONF[] = {
@@ -749,6 +753,7 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
   uint8_t NxpNci_CLK_CONF[] = {
       0x20, 0x02, 0x05, 0x01, /* CORE_SET_CONFIG_CMD */
       0xA0, 0x03, 0x01, 0x08  /* CLOCK_SEL_CFG */
+      // JG: command checked, ok.
   };
 #else
   /* PLL configuration */
