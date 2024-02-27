@@ -128,7 +128,6 @@ class PN7150 : public Mode {
   bool setEmulationMode();
   bool setP2PMode();
   bool configureSettings(void);
-  bool configureSettings(uint8_t *nfcuid, uint8_t uidlen);
   uint8_t startDiscovery();
   uint8_t StartDiscovery(uint8_t modeSE);  // Deprecated, use startDiscovery() instead
   bool stopDiscovery();
