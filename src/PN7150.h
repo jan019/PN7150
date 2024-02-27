@@ -102,7 +102,6 @@ class PN7150 : public Mode {
   unsigned long timeOut;
   unsigned long timeOutStartTime;
   uint32_t rxMessageLength;  // length of the last message received. As these are not 0x00 terminated, we need to remember the length
-  uint8_t gNfcController_generation = 0;
   uint8_t gNfcController_fw_version[3] = {0};
   void setTimeOut(unsigned long);  // set a timeOut for an expected next event, eg reception of Response after sending a Command
   bool isTimeOut() const;

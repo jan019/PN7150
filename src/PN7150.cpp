@@ -273,10 +273,8 @@ uint8_t PN7150::connectNCI() {
     return ERROR;
 
   // Retrieve NXP-NCI NFC Controller generation
-  if (rxBuffer[17 + rxBuffer[8]] == 0x08)
-    gNfcController_generation = 1;
-  else if (rxBuffer[17 + rxBuffer[8]] == 0x10)
-    gNfcController_generation = 2;
+  if (rxBuffer[17 + rxBuffer[8]] != 0x10)
+    return ERROR; // Not supported
 
   // Retrieve NXP-NCI NFC Controller FW version
   gNfcController_fw_version[0] = rxBuffer[17 + rxBuffer[8]];  // 0xROM_CODE_V
@@ -286,7 +284,6 @@ uint8_t PN7150::connectNCI() {
   Serial.println("0xROM_CODE_V: " + String(gNfcController_fw_version[0], HEX));
   Serial.println("FW_MAJOR_NO: " + String(gNfcController_fw_version[1], HEX));
   Serial.println("0xFW_MINOR_NO: " + String(gNfcController_fw_version[2], HEX));
-  Serial.println("gNfcController_generation: " + String(gNfcController_generation, HEX));
 #endif
 
   return SUCCESS;
@@ -449,17 +446,14 @@ bool PN7150::configureSettings(void) {
   /* NXP-NCI TVDD configuration
    * Refer to NFC controller Hardware Design Guide document for more details
    */
-  /* RF configuration related to 1st generation of NXP-NCI controller (e.g PN7120) */
-  uint8_t NxpNci_TVDD_CONF_1stGen[] = {0x20, 0x02, 0x05, 0x01, 0xA0, 0x13, 0x01, 0x00};
-
   /* RF configuration related to 2nd generation of NXP-NCI controller (e.g PN7150)*/
 #if (NXP_TVDD_CONF == 1)
   /* PMU_CFG - Configuration of the Power Management Unit (PMU)*/
   /* CFG1: Vbat is used to generate the VDD(TX) through TXLDO */
-  uint8_t NxpNci_TVDD_CONF_2ndGen[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x02, 0x09, 0x00};
+  uint8_t NxpNci_TVDD_CONF[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x02, 0x09, 0x00};
 #else
   /* CFG2: external 5V is used to generate the VDD(TX) through TXLDO */
-  uint8_t NxpNci_TVDD_CONF_2ndGen[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x06, 0x64, 0x00}; /* PMU_CFG */
+  uint8_t NxpNci_TVDD_CONF[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x06, 0x64, 0x00}; /* PMU_CFG */
 #endif
   // JG: command checked, ok.
 #endif
@@ -468,22 +462,9 @@ bool PN7150::configureSettings(void) {
   /* NXP-NCI RF configuration
    * Refer to NFC controller Antenna Design and Tuning Guidelines document for more details
    */
-  /* RF configuration related to 1st generation of NXP-NCI controller (e.g PN7120) */
-  /* Following configuration is the default settings of PN7120 NFC Controller */
-  uint8_t NxpNci_RF_CONF_1stGen[] = {
-      0x20, 0x02, 0x38, 0x07,
-      0xA0, 0x0D, 0x06, 0x06, 0x42, 0x01, 0x00, 0xF1, 0xFF, /* RF_CLIF_CFG_TARGET          CLIF_ANA_TX_AMPLITUDE_REG */
-      0xA0, 0x0D, 0x06, 0x06, 0x44, 0xA3, 0x90, 0x03, 0x00, /* RF_CLIF_CFG_TARGET          CLIF_ANA_RX_REG */
-      0xA0, 0x0D, 0x06, 0x34, 0x2D, 0xDC, 0x50, 0x0C, 0x00, /* RF_CLIF_CFG_BR_106_I_RXA_P  CLIF_SIGPRO_RM_CONFIG1_REG */
-      0xA0, 0x0D, 0x04, 0x06, 0x03, 0x00, 0x70,             /* RF_CLIF_CFG_TARGET          CLIF_TRANSCEIVE_CONTROL_REG */
-      0xA0, 0x0D, 0x03, 0x06, 0x16, 0x00,                   /* RF_CLIF_CFG_TARGET          CLIF_TX_UNDERSHOOT_CONFIG_REG */
-      0xA0, 0x0D, 0x03, 0x06, 0x15, 0x00,                   /* RF_CLIF_CFG_TARGET          CLIF_TX_OVERSHOOT_CONFIG_REG */
-      0xA0, 0x0D, 0x06, 0x32, 0x4A, 0x53, 0x07, 0x01, 0x1B  /* RF_CLIF_CFG_BR_106_I_TXA    CLIF_ANA_TX_SHAPE_CONTROL_REG */
-  };
-
   /* RF configuration related to 2nd generation of NXP-NCI controller (e.g PN7150)*/
   /* Following configuration relates to performance optimization of OM5578/PN7150 NFC Controller demo kit */
-  uint8_t NxpNci_RF_CONF_2ndGen[] = {
+  uint8_t NxpNci_RF_CONF[] = {
       0x20, 0x02, 0x94, 0x11,
       0xA0, 0x0D, 0x06, 0x04, 0x35, 0x90, 0x01, 0xF4, 0x01, /* RF_CLIF_CFG_INITIATOR        CLIF_AGC_INPUT_REG */
       0xA0, 0x0D, 0x06, 0x06, 0x30, 0x01, 0x90, 0x03, 0x00, /* RF_CLIF_CFG_TARGET           CLIF_SIGPRO_ADCBCM_THRESHOLD_REG */
@@ -572,8 +553,6 @@ bool PN7150::configureSettings(void) {
      or in case of PN7150B0HN/C11004 Anti-tearing recovery procedure inducing RF setings were restored to their default value */
 #if (NXP_CORE_CONF_EXTN | NXP_CLK_CONF | NXP_TVDD_CONF | NXP_RF_CONF)
   /* First read timestamp stored in NFC Controller */
-  if (gNfcController_generation == 1)
-    NCIReadTS[5] = 0x0F;
   (void)writeData(NCIReadTS, sizeof(NCIReadTS));
   getMessage(10);
   if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x03) || (rxBuffer[3] != 0x00)) {
@@ -622,7 +601,7 @@ bool PN7150::configureSettings(void) {
 
 #if NXP_TVDD_CONF
   if (NxpNci_CONF_size != 0) {
-    (void)writeData(NxpNci_TVDD_CONF_2ndGen, sizeof(NxpNci_TVDD_CONF_2ndGen));
+    (void)writeData(NxpNci_TVDD_CONF, sizeof(NxpNci_TVDD_CONF));
     getMessage(10);
     if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00) || (rxBuffer[4] != 0x00)) {
 #ifdef DEBUG
@@ -635,7 +614,7 @@ bool PN7150::configureSettings(void) {
 
 #if NXP_RF_CONF
   if (NxpNci_CONF_size != 0) {
-    (void)writeData(NxpNci_RF_CONF_2ndGen, sizeof(NxpNci_RF_CONF_2ndGen));
+    (void)writeData(NxpNci_RF_CONF, sizeof(NxpNci_RF_CONF));
     getMessage(10);
     if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00) || (rxBuffer[4] != 0x00)) {
 #ifdef DEBUG
@@ -646,8 +625,6 @@ bool PN7150::configureSettings(void) {
   }
 #endif
   /* Store curent timestamp to NFC Controller memory for further checks */
-  if (gNfcController_generation == 1)
-    NCIWriteTS[5] = 0x0F;
   memcpy(&NCIWriteTS[7], currentTS, sizeof(currentTS));
   (void)writeData(NCIWriteTS, sizeof(NCIWriteTS));
   getMessage(10);
@@ -725,16 +702,13 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
   /* NXP-NCI TVDD configuration
    * Refer to NFC controller Hardware Design Guide document for more details
    */
-  /* RF configuration related to 1st generation of NXP-NCI controller (e.g PN7120) */
-  uint8_t NxpNci_TVDD_CONF_1stGen[] = {0x20, 0x02, 0x05, 0x01, 0xA0, 0x13, 0x01, 0x00};
-
   /* RF configuration related to 2nd generation of NXP-NCI controller (e.g PN7150)*/
 #if (NXP_TVDD_CONF == 1)
   /* CFG1: Vbat is used to generate the VDD(TX) through TXLDO */
-  uint8_t NxpNci_TVDD_CONF_2ndGen[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x02, 0x09, 0x00};
+  uint8_t NxpNci_TVDD_CONF[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x02, 0x09, 0x00};
 #else
   /* CFG2: external 5V is used to generate the VDD(TX) through TXLDO */
-  uint8_t NxpNci_TVDD_CONF_2ndGen[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x06, 0x64, 0x00};
+  uint8_t NxpNci_TVDD_CONF[] = {0x20, 0x02, 0x07, 0x01, 0xA0, 0x0E, 0x03, 0x06, 0x64, 0x00};
 #endif
 #endif
 
@@ -742,22 +716,9 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
   /* NXP-NCI RF configuration
    * Refer to NFC controller Antenna Design and Tuning Guidelines document for more details
    */
-  /* RF configuration related to 1st generation of NXP-NCI controller (e.g PN7120) */
-  /* Following configuration is the default settings of PN7120 NFC Controller */
-  uint8_t NxpNci_RF_CONF_1stGen[] = {
-      0x20, 0x02, 0x38, 0x07,
-      0xA0, 0x0D, 0x06, 0x06, 0x42, 0x01, 0x00, 0xF1, 0xFF, /* RF_CLIF_CFG_TARGET          CLIF_ANA_TX_AMPLITUDE_REG */
-      0xA0, 0x0D, 0x06, 0x06, 0x44, 0xA3, 0x90, 0x03, 0x00, /* RF_CLIF_CFG_TARGET          CLIF_ANA_RX_REG */
-      0xA0, 0x0D, 0x06, 0x34, 0x2D, 0xDC, 0x50, 0x0C, 0x00, /* RF_CLIF_CFG_BR_106_I_RXA_P  CLIF_SIGPRO_RM_CONFIG1_REG */
-      0xA0, 0x0D, 0x04, 0x06, 0x03, 0x00, 0x70,             /* RF_CLIF_CFG_TARGET          CLIF_TRANSCEIVE_CONTROL_REG */
-      0xA0, 0x0D, 0x03, 0x06, 0x16, 0x00,                   /* RF_CLIF_CFG_TARGET          CLIF_TX_UNDERSHOOT_CONFIG_REG */
-      0xA0, 0x0D, 0x03, 0x06, 0x15, 0x00,                   /* RF_CLIF_CFG_TARGET          CLIF_TX_OVERSHOOT_CONFIG_REG */
-      0xA0, 0x0D, 0x06, 0x32, 0x4A, 0x53, 0x07, 0x01, 0x1B  /* RF_CLIF_CFG_BR_106_I_TXA    CLIF_ANA_TX_SHAPE_CONTROL_REG */
-  };
-
   /* RF configuration related to 2nd generation of NXP-NCI controller (e.g PN7150)*/
   /* Following configuration relates to performance optimization of OM5578/PN7150 NFC Controller demo kit */
-  uint8_t NxpNci_RF_CONF_2ndGen[] = {
+  uint8_t NxpNci_RF_CONF[] = {
       0x20, 0x02, 0x94, 0x11,
       0xA0, 0x0D, 0x06, 0x04, 0x35, 0x90, 0x01, 0xF4, 0x01, /* RF_CLIF_CFG_INITIATOR        CLIF_AGC_INPUT_REG */
       0xA0, 0x0D, 0x06, 0x06, 0x30, 0x01, 0x90, 0x03, 0x00, /* RF_CLIF_CFG_TARGET           CLIF_SIGPRO_ADCBCM_THRESHOLD_REG */
@@ -847,8 +808,6 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
      or in case of PN7150B0HN/C11004 Anti-tearing recovery procedure inducing RF setings were restored to their default value */
 #if (NXP_CORE_CONF_EXTN | NXP_CLK_CONF | NXP_TVDD_CONF | NXP_RF_CONF)
   /* First read timestamp stored in NFC Controller */
-  if (gNfcController_generation == 1)
-    NCIReadTS[5] = 0x0F;
   (void)writeData(NCIReadTS, sizeof(NCIReadTS));
   getMessage();
   if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x03) || (rxBuffer[3] != 0x00)) {
@@ -897,7 +856,7 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
 
 #if NXP_TVDD_CONF
   if (NxpNci_CONF_size != 0) {
-    (void)writeData(NxpNci_TVDD_CONF_2ndGen, sizeof(NxpNci_TVDD_CONF_2ndGen));
+    (void)writeData(NxpNci_TVDD_CONF, sizeof(NxpNci_TVDD_CONF));
     getMessage();
     if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00) || (rxBuffer[4] != 0x00)) {
 #ifdef DEBUG
@@ -910,7 +869,7 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
 
 #if NXP_RF_CONF
   if (NxpNci_CONF_size != 0) {
-    (void)writeData(NxpNci_RF_CONF_2ndGen, sizeof(NxpNci_RF_CONF_2ndGen));
+    (void)writeData(NxpNci_RF_CONF, sizeof(NxpNci_RF_CONF));
     getMessage();
     if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00) || (rxBuffer[4] != 0x00)) {
 #ifdef DEBUG
@@ -921,8 +880,6 @@ bool PN7150::configureSettings(uint8_t *uidcf, uint8_t uidlen) {
   }
 #endif
   /* Store curent timestamp to NFC Controller memory for further checks */
-  if (gNfcController_generation == 1)
-    NCIWriteTS[5] = 0x0F;
   memcpy(&NCIWriteTS[7], currentTS, sizeof(currentTS));
   (void)writeData(NCIWriteTS, sizeof(NCIWriteTS));
   getMessage();
@@ -1622,22 +1579,15 @@ void PN7150::writeNdefMessage(void) {
 }
 
 bool PN7150::nciFactoryTestPrbs(NxpNci_TechType_t type, NxpNci_Bitrate_t bitrate) {
-  uint8_t NCIPrbs_1stGen[] = {0x2F, 0x30, 0x04, 0x00, 0x00, 0x01, 0x01};
-  uint8_t NCIPrbs_2ndGen[] = {0x2F, 0x30, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01};
+  uint8_t NCIPrbs[] = {0x2F, 0x30, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01};
   uint8_t *NxpNci_cmd;
   uint16_t NxpNci_cmd_size = 0;
 
-  if (gNfcController_generation == 1) {
-    NxpNci_cmd = NCIPrbs_1stGen;
-    NxpNci_cmd_size = sizeof(NCIPrbs_1stGen);
-    NxpNci_cmd[3] = type;
-    NxpNci_cmd[4] = bitrate;
-  } else if (gNfcController_generation == 2) {
-    NxpNci_cmd = NCIPrbs_2ndGen;
-    NxpNci_cmd_size = sizeof(NCIPrbs_2ndGen);
+    NxpNci_cmd = NCIPrbs;
+    NxpNci_cmd_size = sizeof(NCIPrbs);
     NxpNci_cmd[5] = type;
     NxpNci_cmd[6] = bitrate;
-  }
+
 
   if (NxpNci_cmd_size != 0) {
     (void)writeData(NxpNci_cmd, sizeof(NxpNci_cmd));
