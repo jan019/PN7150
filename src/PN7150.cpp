@@ -3,7 +3,8 @@
 uint8_t gNextTag_Protocol = PROT_UNDETERMINED;
 
 uint8_t NCIStartDiscovery_length = 0;
-uint8_t NCIStartDiscovery[30];
+const std::size_t maxNCIStartDiscoveryLength = 30;
+uint8_t NCIStartDiscovery[maxNCIStartDiscoveryLength];
 
 unsigned char DiscoveryTechnologiesCE[] = { // Emulation
     MODE_LISTEN | MODE_POLL};
@@ -135,18 +136,27 @@ uint8_t PN7150::wakeupNCI()
 }
 
 // TODO: the magic number 1337 sets and inifite loop (called in one place), this is not accceptable. Remove it.
+// this implemntation must be improved
 bool PN7150::getMessage(uint16_t timeout)
 { // check for message using timeout, 5 milisec as default
     setTimeOut(timeout);
     rxMessageLength = 0;
     while (!isTimeOut())
     {
-        rxMessageLength = readData(rxBuffer);
+        rxMessageLength = readData(rxBuffer, rxBufferSize);
+        if (rxMessageLength == 0xFFFFFFFF) // buffer overflow
+        {
+            rxMessageLength = 0; // hacky solution for now because library does not check return of getMessage, it works of rxMessageLength value 0 or 1
+            return false;
+        }
+
         if (rxMessageLength)
-            break;
+            return true;
         else if (timeout == 1337)
             setTimeOut(timeout);
+            // this creates and inifite loop and must be removed
     }
+
     return rxMessageLength;
 }
 
@@ -155,6 +165,7 @@ bool PN7150::hasMessage() const
     return (HIGH == digitalRead(_IRQpin)); // PN7150 indicates it has data by driving IRQ signal HIGH
 }
 
+// not a safe implementation, but if all occurenes of call are checked and the size is always given as sizeof, thenn it should be fine
 uint8_t PN7150::writeData(const uint8_t txBuffer[], uint32_t txBufferLevel) const
 {
     uint32_t nmbrBytesWritten = 0;
@@ -167,7 +178,7 @@ uint8_t PN7150::writeData(const uint8_t txBuffer[], uint32_t txBufferLevel) cons
     if (nmbrBytesWritten == txBufferLevel)
     {
         byte resultCode;
-        resultCode = _wire->endTransmission(); // envio de datos segun yo
+        resultCode = _wire->endTransmission();
         delay(10);
 #ifdef DEBUG2
         Serial.println("[DEBUG] write data code = 0x" + String(resultCode, HEX));
@@ -180,14 +191,12 @@ uint8_t PN7150::writeData(const uint8_t txBuffer[], uint32_t txBufferLevel) cons
     }
 }
 
-uint32_t PN7150::readData(uint8_t rxBuffer[]) const
+uint32_t PN7150::readData(uint8_t rxBuffer[], uint16_t bufferSize) const
 {
     uint32_t bytesReceived; // keeps track of how many bytes we actually received
     if (hasMessage())
     {                                                                // only try to read something if the PN7150 indicates it has something
         bytesReceived = _wire->requestFrom(_I2Caddress, (uint8_t)3); // first reading the header, as this contains how long the payload will be
-                                                                     // Imprimir datos de bytes received, tratar de extraer con funcion read
-                                                                     // Leer e inyectar directo al buffer los siguientes 3
         delay(10);
 #ifdef DEBUG2
         Serial.println("[DEBUG] bytesReceived = 0x" + String(bytesReceived, HEX));
@@ -219,10 +228,21 @@ uint32_t PN7150::readData(uint8_t rxBuffer[]) const
         }
 #endif
         uint8_t payloadLength = rxBuffer[2];
+        if (payloadLength >= bufferSize)
+        {
+            return 0xFFFFFFFF; // buffer overflow
+        }
+
         if (payloadLength > 0)
         {
-            bytesReceived += _wire->requestFrom(_I2Caddress, (uint8_t)payloadLength); // then reading the payload, if any
+            bytesReceived += _wire->requestFrom(_I2Caddress, payloadLength); // then reading the payload, if any
             delay(10);
+
+            if (bytesReceived >= bufferSize)
+            {
+                return 0xFFFFFFFF; // buffer overflow
+            }
+
 #ifdef DEBUG2
             Serial.println("[DEBUG] payload bytes = 0x" + String(bytesReceived - 3, HEX));
 #endif
@@ -232,8 +252,10 @@ uint32_t PN7150::readData(uint8_t rxBuffer[]) const
                 int byte = _wire->read();
                 if (byte == -1)
                 {
+#ifdef DEBUG2
                     Serial.println("[DEBUG] Error reading byte");
                     Serial.println("[DEBUG] byte: 0x" + String(byte, HEX));
+#endif
                     return 0;
                 }
                 rxBuffer[index] = byte;
@@ -295,13 +317,19 @@ uint8_t PN7150::connectNCI()
         return ERROR;
 
     // Retrieve NXP-NCI NFC Controller generation
-    if (rxBuffer[17 + rxBuffer[8]] != 0x10)
+    std::size_t romCodePos = 17 + rxBuffer[8];
+    std::size_t majorFwVersion = 18 + rxBuffer[8];
+    std::size_t minorFwversion = 19 + rxBuffer[8];
+    if (minorFwversion >= rxBufferSize)
+        return ERROR; // buffer overflow
+
+    if (rxBuffer[romCodePos] != 0x10)
         return ERROR; // Not supported
 
     // Retrieve NXP-NCI NFC Controller FW version
-    gNfcController_fw_version[0] = rxBuffer[17 + rxBuffer[8]]; // 0xROM_CODE_V
-    gNfcController_fw_version[1] = rxBuffer[18 + rxBuffer[8]]; // 0xFW_MAJOR_NO
-    gNfcController_fw_version[2] = rxBuffer[19 + rxBuffer[8]]; // 0xFW_MINOR_NO
+    gNfcController_fw_version[0] = rxBuffer[romCodePos]; // 0xROM_CODE_V
+    gNfcController_fw_version[1] = rxBuffer[majorFwVersion]; // 0xFW_MAJOR_NO
+    gNfcController_fw_version[2] = rxBuffer[minorFwversion]; // 0xFW_MINOR_NO
 #ifdef DEBUG
     Serial.println("0xROM_CODE_V: " + String(gNfcController_fw_version[0], HEX));
     Serial.println("FW_MAJOR_NO: " + String(gNfcController_fw_version[1], HEX));
@@ -369,20 +397,42 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
     if ((mode & MODE_CARDEMU and modeSE == 2) || (mode & MODE_P2P and modeSE == 3))
     {
-        memcpy(&Command[4 + (3 * Item)], (modeSE == 2 ? DM_CARDEMU : DM_P2P), sizeof((modeSE == 2 ? DM_CARDEMU : DM_P2P)));
+        std::size_t copyStartPos = 4 + (3 * Item);
+        if ((copyStartPos + sizeof((modeSE == 2 ? DM_CARDEMU : DM_P2P))) >= MAX_NCI_FRAME_SIZE)
+        {
+            return ERROR; // buffer overflow
+        }
+        memcpy(&Command[copyStartPos], (modeSE == 2 ? DM_CARDEMU : DM_P2P), sizeof((modeSE == 2 ? DM_CARDEMU : DM_P2P)));
         Item++;
     }
     if (mode & MODE_RW and modeSE == 1)
     {
-        memcpy(&Command[4 + (3 * Item)], DM_RW, sizeof(DM_RW));
+        std::size_t copyStartPos = 4 + (3 * Item);
+        if ((copyStartPos + sizeof(DM_RW)) >= MAX_NCI_FRAME_SIZE)
+        {
+            return ERROR; // buffer overflow
+        }
+        memcpy(&Command[copyStartPos], DM_RW, sizeof(DM_RW));
         Item += sizeof(DM_RW) / 3;
     }
     if (Item != 0)
     {
+        if (sizeof(NCIDiscoverMap) >= MAX_NCI_FRAME_SIZE)
+        {
+            return ERROR; // buffer overflow
+        }
+
         memcpy(Command, NCIDiscoverMap, sizeof(NCIDiscoverMap));
         Command[2] = 1 + (Item * 3);
         Command[3] = Item;
-        (void)writeData(Command, 3 + Command[2]);
+
+        std::size_t writeSize = 3 + Command[2];
+        if ((writeSize) >= MAX_NCI_FRAME_SIZE)
+        {
+            return ERROR; // buffer overflow
+        }
+
+        (void)writeData(Command, writeSize);
         getMessage(10);
         if ((rxBuffer[0] != 0x41) || (rxBuffer[1] != 0x00) || (rxBuffer[3] != 0x00))
         {
@@ -395,7 +445,13 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
     if (modeSE == 2 || modeSE == 3)
     { // Emulation or P2P
-        memcpy(&Command[5 + (5 * Item)], (modeSE == 2 ? R_CARDEMU : R_P2P), sizeof((modeSE == 2 ? R_CARDEMU : R_P2P)));
+        std::size_t copyStartPos = 5 + (5 * Item);
+        if ((copyStartPos + sizeof((modeSE == 2 ? R_CARDEMU : R_P2P))) >= MAX_NCI_FRAME_SIZE)
+        {
+            return ERROR; // buffer overflow
+        }
+
+        memcpy(&Command[copyStartPos], (modeSE == 2 ? R_CARDEMU : R_P2P), sizeof((modeSE == 2 ? R_CARDEMU : R_P2P)));
         Item++;
 
         if (Item != 0)
@@ -403,7 +459,14 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
             memcpy(Command, NCIRouting, sizeof(NCIRouting));
             Command[2] = 2 + (Item * 5);
             Command[4] = Item;
-            (void)writeData(Command, 3 + Command[2]);
+
+            std::size_t writeSize = 3 + Command[2];
+            if ((writeSize) >= MAX_NCI_FRAME_SIZE)
+            {
+                return ERROR; // buffer overflow
+            }
+
+            (void)writeData(Command, writeSize);
             getMessage(10);
             if ((rxBuffer[0] != 0x41) || (rxBuffer[1] != 0x01) || (rxBuffer[3] != 0x00))
                 return ERROR;
@@ -743,6 +806,11 @@ uint8_t PN7150::StartDiscovery(uint8_t modeSE)
     }
 
     NCIStartDiscovery_length = (TechTabSize * 2) + 4;
+    if (NCIStartDiscovery_length >= maxNCIStartDiscoveryLength)
+    {
+        return ERROR; // buffer overflow
+    }
+
     (void)writeData(NCIStartDiscovery, NCIStartDiscovery_length);
     getMessage();
 
@@ -875,6 +943,10 @@ wait:
         gNextTag_Protocol = rxBuffer[4];
 
         /* Remaining NTF ? */
+        if (rxMessageLength >= rxBufferSize)
+        {
+            return ERROR;
+        }
 
         while (rxBuffer[rxMessageLength - 1] == 0x02)
             getMessage(100);
@@ -895,6 +967,11 @@ wait:
 
         if ((rxBuffer[0] == 0x41) || (rxBuffer[1] == 0x04) || (rxBuffer[3] == 0x00))
         {
+            if (rxMessageLength >= rxBufferSize)
+            {
+                return ERROR; // buffer overflow
+            }
+
             (void)writeData(rxBuffer, rxMessageLength);
             getMessage(100);
 
@@ -916,6 +993,11 @@ wait:
                 (void)writeData(NCIStopDiscovery, sizeof(NCIStopDiscovery));
                 getMessage();
                 getMessage(100);
+
+                if (NCIStartDiscovery_length >= maxNCIStartDiscoveryLength)
+                {
+                    return ERROR; // buffer overflow
+                }
 
                 (void)writeData(NCIStartDiscovery, NCIStartDiscovery_length);
                 getMessage();
@@ -949,6 +1031,11 @@ bool PN7150::cardModeSend(unsigned char *pData, unsigned char DataSize)
     Cmd[0] = 0x00;
     Cmd[1] = 0x00;
     Cmd[2] = DataSize;
+
+    if (DataSize >= MAX_NCI_FRAME_SIZE - 3) // -3 because the first 3 bytes are used for the header
+    {
+        return false; // buffer overflow
+    }
     memcpy(&Cmd[3], pData, DataSize);
     (void)writeData(Cmd, DataSize + 3);
     return status;
@@ -965,7 +1052,7 @@ bool PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize)
     bool status = NFC_ERROR;
     uint8_t Ans[MAX_NCI_FRAME_SIZE];
 
-    (void)writeData(Ans, 255);
+    (void)writeData(Ans, MAX_NCI_FRAME_SIZE - 3);
     getMessage(2000);
 
     /* Is data packet ? */
@@ -974,6 +1061,11 @@ bool PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize)
 #ifdef DEBUG2
         Serial.println(rxBuffer[2]);
 #endif
+        if (rxBuffer[2] >= rxBufferSize)
+        {
+            return false; // buffer overflow
+        }
+
         *pDataSize = rxBuffer[2];
         memcpy(pData, &rxBuffer[3], *pDataSize);
         status = NFC_SUCCESS;
@@ -984,6 +1076,7 @@ bool PN7150::cardModeReceive(unsigned char *pData, unsigned char *pDataSize)
     }
     return status;
 }
+
 
 void PN7150::ProcessCardMode(RfIntf_t RfIntf)
 {
@@ -1014,6 +1107,12 @@ void PN7150::ProcessCardMode(RfIntf_t RfIntf)
                         break;
                     getMessage(100);
                 } while (rxMessageLength != 0);
+
+                if (NCIStartDiscovery_length >= maxNCIStartDiscoveryLength)
+                {
+                    return; // buffer overflow
+                }
+
                 (void)writeData(NCIStartDiscovery, NCIStartDiscovery_length);
                 getMessage();
             }
@@ -1032,6 +1131,10 @@ void PN7150::ProcessCardMode(RfIntf_t RfIntf)
             Cmd[1] = (CmdSize & 0xFF00) >> 8;
             Cmd[2] = CmdSize & 0x00FF;
 
+            if (CmdSize >= MAX_NCI_FRAME_SIZE - 3)
+            {
+                return; // buffer overflow
+            }
             (void)writeData(Cmd, CmdSize + 3);
             getMessage();
         }
@@ -1102,6 +1205,11 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
             Cmd[1] = (CmdSize & 0xFF00) >> 8;
             Cmd[2] = CmdSize & 0x00FF;
             status = ERROR;
+
+            if (CmdSize >= MAX_NCI_FRAME_SIZE - 3)
+            {
+                return; // buffer overflow
+            }
             (void)writeData(Cmd, CmdSize + 3);
             getMessage();
             if (rxMessageLength > 0)
@@ -1132,6 +1240,12 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
                         restart = false;
                 }
                 status = ERROR;
+
+                if (rxMessageLength >= rxBufferSize)
+                {
+                    return; // buffer overflow
+                }
+
                 (void)writeData(rxBuffer, rxMessageLength);
                 getMessage();
                 if (rxMessageLength > 0)
@@ -1143,6 +1257,11 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
 
         /* Wait for next frame from remote P2P, or notification event */
         status = ERROR;
+
+        if (rxMessageLength >= rxBufferSize)
+        {
+            return; // buffer overflow
+        }
         (void)writeData(rxBuffer, rxMessageLength);
         getMessage();
         if (rxMessageLength > 0)
@@ -1226,6 +1345,11 @@ void PN7150::presenceCheck(RfIntf_t RfIntf)
             getMessage();
             getMessage(100);
             status = ERROR;
+            if (rxMessageLength >= rxBufferSize)
+            {
+                return; // buffer overflow, TODO: change return type of fcn?
+            }
+
             if (rxMessageLength)
                 status = SUCCESS;
         } while ((status == SUCCESS) && (rxBuffer[0] == 0x00) && (rxBuffer[1] == 0x00) && (rxBuffer[rxMessageLength - 1] == 0x00));
@@ -1269,6 +1393,10 @@ bool PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, un
     Cmd[2] = CommandSize;
     memcpy(&Cmd[3], pCommand, CommandSize);
 
+    if (CommandSize >= MAX_NCI_FRAME_SIZE - 3)
+    {
+        return ERROR; // buffer overflow
+    }
     (void)writeData(Cmd, CommandSize + 3);
     getMessage();
     getMessage(1000);
@@ -1395,6 +1523,11 @@ void PN7150::readNdef(RfIntf_t RfIntf)
             Cmd[1] = (CmdSize & 0xFF00) >> 8;
             Cmd[2] = CmdSize & 0x00FF;
 
+            if (CmdSize >= MAX_NCI_FRAME_SIZE - 3)
+            {
+                return; // buffer overflow
+            }
+
             (void)writeData(Cmd, CmdSize + 3);
             getMessage();
             getMessage(1000);
@@ -1447,6 +1580,10 @@ void PN7150::writeNdef(RfIntf_t RfIntf)
             Cmd[1] = (CmdSize & 0xFF00) >> 8;
             Cmd[2] = CmdSize & 0x00FF;
 
+            if (CmdSize >= MAX_NCI_FRAME_SIZE - 3)
+            {
+                return; // buffer overflow
+            }
             (void)writeData(Cmd, CmdSize + 3);
             getMessage();
             getMessage(2000);

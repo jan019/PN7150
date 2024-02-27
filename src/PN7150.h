@@ -40,6 +40,7 @@ constexpr uint16_t MAX_NCI_FRAME_SIZE = 258;
 
 constexpr uint8_t MaxPayloadSize = 255; // See NCI specification V1.0, section 3.1
 constexpr uint8_t MsgHeaderSize = 3;
+constexpr uint16_t rxBufferSize = MaxPayloadSize + MsgHeaderSize;
 
 /***** Factory Test dedicated APIs *********************************************/
 #ifdef NFC_FACTORY_TEST
@@ -85,7 +86,7 @@ private:
     uint8_t _IRQpin, _VENpin, _I2Caddress;
     TwoWire *_wire;
     RfIntf_t dummyRfInterface;
-    uint8_t rxBuffer[MaxPayloadSize + MsgHeaderSize]; // buffer where we store bytes received until they form a complete message
+    uint8_t rxBuffer[rxBufferSize]; // buffer where we store bytes received until they form a complete message
     unsigned long timeOut;
     unsigned long timeOutStartTime;
     uint32_t rxMessageLength; // length of the last message received. As these are not 0x00 terminated, we need to remember the length
@@ -106,7 +107,7 @@ public:
     Interface interface;
     bool hasMessage() const;
     uint8_t writeData(const uint8_t data[], uint32_t dataLength) const; // write data from DeviceHost to PN7150. Returns success (0) or Fail (> 0)
-    uint32_t readData(uint8_t data[]) const;                            // read data from PN7150, returns the amount of bytes read
+    uint32_t readData(uint8_t data[], uint16_t bufferSize) const;                            // read data from PN7150, returns the amount of bytes read
     int getFirmwareVersion();
     uint8_t connectNCI();
     uint8_t ConfigMode(uint8_t modeSE); // Deprecated, use configMode(void) instead
@@ -147,3 +148,29 @@ public:
 };
 
 #endif
+
+
+uint8_t PN7150::writeData(const uint8_t txBuffer[], uint32_t txBufferLevel) const
+{
+    uint32_t nmbrBytesWritten = 0;
+    _wire->beginTransmission(_I2Caddress);
+    nmbrBytesWritten = _wire->write(txBuffer, (size_t)(txBufferLevel));
+    delay(10);
+#ifdef DEBUG2
+    Serial.println("[DEBUG] written bytes = 0x" + String(nmbrBytesWritten, HEX));
+#endif
+    if (nmbrBytesWritten == txBufferLevel)
+    {
+        byte resultCode;
+        resultCode = _wire->endTransmission();
+        delay(10);
+#ifdef DEBUG2
+        Serial.println("[DEBUG] write data code = 0x" + String(resultCode, HEX));
+#endif
+        return resultCode;
+    }
+    else
+    {
+        return 4; // Could not properly copy data to I2C buffer, so treat as other error, see i2c_t3
+    }
+}
