@@ -148,29 +148,3 @@ public:
 };
 
 #endif
-
-
-uint8_t PN7150::writeData(const uint8_t txBuffer[], uint32_t txBufferLevel) const
-{
-    uint32_t nmbrBytesWritten = 0;
-    _wire->beginTransmission(_I2Caddress);
-    nmbrBytesWritten = _wire->write(txBuffer, (size_t)(txBufferLevel));
-    delay(10);
-#ifdef DEBUG2
-    Serial.println("[DEBUG] written bytes = 0x" + String(nmbrBytesWritten, HEX));
-#endif
-    if (nmbrBytesWritten == txBufferLevel)
-    {
-        byte resultCode;
-        resultCode = _wire->endTransmission();
-        delay(10);
-#ifdef DEBUG2
-        Serial.println("[DEBUG] write data code = 0x" + String(resultCode, HEX));
-#endif
-        return resultCode;
-    }
-    else
-    {
-        return 4; // Could not properly copy data to I2C buffer, so treat as other error, see i2c_t3
-    }
-}

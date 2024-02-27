@@ -456,6 +456,11 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
         if (Item != 0)
         {
+            if (sizeof(NCIRouting) >= MAX_NCI_FRAME_SIZE)
+            {
+                return ERROR; // buffer overflow
+            }
+
             memcpy(Command, NCIRouting, sizeof(NCIRouting));
             Command[2] = 2 + (Item * 5);
             Command[4] = Item;
@@ -616,9 +621,11 @@ bool PN7150::configureSettings(void)
     uint16_t NxpNci_CONF_size = 0;
 #endif
 #if (NXP_CORE_CONF_EXTN | NXP_CLK_CONF | NXP_TVDD_CONF | NXP_RF_CONF)
-    uint8_t currentTS[32] = __TIMESTAMP__;
+    const std::size_t timestampSize = 32;
+    const std::size_t headerSize = 7;
+    uint8_t currentTS[timestampSize] = __TIMESTAMP__;
     uint8_t NCIReadTS[] = {0x20, 0x03, 0x03, 0x01, 0xA0, 0x14};              // CORE_GET_CONFIG_CMD - (NXP extended) read EEPROM; DH_EEPROM_AREA_2 - 32-Byte EEPROM area dedicated to the DH to store/retrieve non-volatile data. JG: command checked, ok.
-    uint8_t NCIWriteTS[7 + 32] = {0x20, 0x02, 0x24, 0x01, 0xA0, 0x14, 0x20}; // CORE_SET_CONFIG_CMD - (NXP extended) write 32 bytes (0x20) to EEPROM; DH_EEPROM_AREA_2
+    uint8_t NCIWriteTS[headerSize + timestampSize] = {0x20, 0x02, 0x24, 0x01, 0xA0, 0x14, 0x20}; // CORE_SET_CONFIG_CMD - (NXP extended) write 32 bytes (0x20) to EEPROM; DH_EEPROM_AREA_2
                                                                              // 7 + 32 because 7 is the length of the command and 32 is the length of the timestamp
                                                                              // JG: both command checked, ok.
 #endif
@@ -741,7 +748,7 @@ bool PN7150::configureSettings(void)
         }
 #endif
         /* Store curent timestamp to NFC Controller memory for further checks */
-        memcpy(&NCIWriteTS[7], currentTS, sizeof(currentTS));
+        memcpy(&NCIWriteTS[headerSize], currentTS, sizeof(currentTS));
         (void)writeData(NCIWriteTS, sizeof(NCIWriteTS));
         getMessage(10);
         if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00) || (rxBuffer[4] != 0x00))
@@ -1391,12 +1398,12 @@ bool PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, un
     Cmd[0] = 0x00;
     Cmd[1] = 0x00;
     Cmd[2] = CommandSize;
-    memcpy(&Cmd[3], pCommand, CommandSize);
-
     if (CommandSize >= MAX_NCI_FRAME_SIZE - 3)
     {
         return ERROR; // buffer overflow
     }
+    memcpy(&Cmd[3], pCommand, CommandSize);
+
     (void)writeData(Cmd, CommandSize + 3);
     getMessage();
     getMessage(1000);
@@ -1404,6 +1411,11 @@ bool PN7150::readerTagCmd(unsigned char *pCommand, unsigned char CommandSize, un
 
     if ((rxBuffer[0] == 0x0) && (rxBuffer[1] == 0x0))
         status = SUCCESS;
+
+    if (*pAnswerSize >= rxBufferSize -3)
+    {
+        return ERROR; // buffer overflow - reading past rxBuffer alocated memory would occur
+    }
 
     *pAnswerSize = rxBuffer[2];
     memcpy(pAnswer, &rxBuffer[3], *pAnswerSize);
@@ -1539,13 +1551,29 @@ void PN7150::readNdef(RfIntf_t RfIntf)
                 uint8_t tmpSize = 0;
                 while (rxBuffer[0] == 0x10)
                 {
+                    if (tmpSize + rxBuffer[2] >= MAX_NCI_FRAME_SIZE)
+                    {
+                        return; // buffer overflow
+                    }
+
                     memcpy(&tmp[tmpSize], &rxBuffer[3], rxBuffer[2]);
                     tmpSize += rxBuffer[2];
                     getMessage(100);
                 }
+
+                if (tmpSize + rxBuffer[2] >= MAX_NCI_FRAME_SIZE)
+                {
+                    return; // buffer overflow
+                }
+
                 memcpy(&tmp[tmpSize], &rxBuffer[3], rxBuffer[2]);
                 tmpSize += rxBuffer[2];
                 //* Compute all chained frame into one unique answer
+
+                if (tmpSize >= rxBufferSize - 3)
+                {
+                    return; // buffer overflow
+                }
                 memcpy(&rxBuffer[3], tmp, tmpSize);
                 rxBuffer[2] = tmpSize;
             }
