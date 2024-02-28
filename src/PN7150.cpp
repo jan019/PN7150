@@ -1,5 +1,6 @@
 #include "PN7150.h"
 
+#define DEBUG2
 uint8_t gNextTag_Protocol = PROT_UNDETERMINED;
 
 uint8_t NCIStartDiscovery_length = 0;
@@ -7,20 +8,28 @@ const std::size_t maxNCIStartDiscoveryLength = 30;
 uint8_t NCIStartDiscovery[maxNCIStartDiscoveryLength];
 
 unsigned char DiscoveryTechnologiesCE[] = { // Emulation
-    MODE_LISTEN | MODE_POLL};
+    //MODE_LISTEN | MODE_POLL
+    MODE_LISTEN | TECH_PASSIVE_NFCA,
+    MODE_LISTEN | TECH_PASSIVE_NFCB,
+    MODE_LISTEN | TECH_PASSIVE_NFCF,
+
+    MODE_LISTEN | TECH_ACTIVE_NFCA,
+    MODE_LISTEN | TECH_ACTIVE_NFCF
+    };
 
 unsigned char DiscoveryTechnologiesRW[] = { // Read & Write
     MODE_POLL | TECH_PASSIVE_NFCA,
     MODE_POLL | TECH_PASSIVE_NFCF,
     MODE_POLL | TECH_PASSIVE_NFCB,
-    MODE_POLL | TECH_PASSIVE_15693};
+    MODE_POLL | TECH_PASSIVE_15693
+    };
 
 unsigned char DiscoveryTechnologiesP2P[] = { // P2P
-    MODE_POLL | TECH_PASSIVE_NFCA,
-    MODE_POLL | TECH_PASSIVE_NFCB,
-    MODE_POLL | TECH_PASSIVE_NFCF,
+    //MODE_POLL | TECH_PASSIVE_NFCA,
+    //MODE_POLL | TECH_PASSIVE_NFCB,
+    //MODE_POLL | TECH_PASSIVE_NFCF,
 
-    MODE_POLL | TECH_ACTIVE_NFCA,
+    //MODE_POLL | TECH_ACTIVE_NFCA,
     // MODE_POLL | TECH_ACTIVE_NFCF,
 
     MODE_LISTEN | TECH_PASSIVE_NFCA,
@@ -28,10 +37,22 @@ unsigned char DiscoveryTechnologiesP2P[] = { // P2P
     MODE_LISTEN | TECH_PASSIVE_NFCF,
 
     MODE_LISTEN | TECH_ACTIVE_NFCA,
-    MODE_LISTEN | TECH_ACTIVE_NFCF};
+    MODE_LISTEN | TECH_ACTIVE_NFCF
+    };
 
 const uint8_t NCICoreReset[] = {0x20, 0x00, 0x01, 0x00}; // CORE_RESET_CMD - 0x00: Reset NCI (keep configuration), 0x01: Reset NCI (restore default configuration), JG: command checked, ok.
 const uint8_t NCICoreInit[] = {0x20, 0x01, 0x00};        // CORE_INIT_CMD - empty payload; JG: command checked, ok.
+
+void PrintArray(const char *msg, uint8_t *pBuff, uint16_t uBuffSize)
+{
+    Serial.println(msg);
+    for (uint8_t i = 0; i < uBuffSize; i++)
+    {
+        Serial.print(" 0x");
+        Serial.print(pBuff[i], HEX);
+    }
+    Serial.println("");
+}
 
 PN7150::PN7150(uint8_t IRQpin, uint8_t VENpin,
                uint8_t I2Caddress, TwoWire *wire) : _IRQpin(IRQpin), _VENpin(VENpin), _I2Caddress(I2Caddress), _wire(wire)
@@ -240,6 +261,7 @@ uint32_t PN7150::readData(uint8_t rxBuffer[], uint16_t bufferSize) const
 
             if (bytesReceived >= bufferSize)
             {
+                Serial.println("Buffer overflow");
                 return 0xFFFFFFFF; // buffer overflow
             }
 
@@ -355,14 +377,18 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
     PN7150::stopDiscovery();
 
-    uint8_t Command[MAX_NCI_FRAME_SIZE];
+    uint8_t Command[MAX_NCI_FRAME_SIZE] = {};
 
     uint8_t Item = 0;
-    uint8_t NCIDiscoverMap[] = {0x21, 0x00};
+    uint8_t NCIDiscoverMap[] = {0x21, 0x00}; // RF_DISCOVER_MAP_CMD header (without payload length) [0x21 - command with GID = 0001b (RF mgmt), 0x00 - OID for RF_DISCOVER_MAP_CMD]
 
     // Emulation mode
+    // RF_DISCOVER_MAP_CMD: [RF protocol] 0x04 = PROTOCOL_ISO_DEP, [Mode] 0x02 = RF interface is mapped to RF protocol in listen mode, [RF interface] 0x02 = ISO-DEP RF interface
+    // TODO: do not build the commands, but use constants and switch through an enum field
     const uint8_t DM_CARDEMU[] = {0x4, 0x2, 0x2};
-    const uint8_t R_CARDEMU[] = {0x1, 0x3, 0x0, 0x1, 0x4};
+
+    // RF_SET_LISTEN_MODE_ROUTING_CMD (combined with NCIRouting cmd)
+    const uint8_t R_CARDEMU[] = {0x1, 0x3, 0x0, 0x1, 0x4}; // 0x01: Type (table 46): protocol-based routing entry; 0x03: Length of value (in this case 3 bytes); [0x00, 0x01, 0x04] the value
 
     // RW Mode
     const uint8_t DM_RW[] = {0x1, 0x1, 0x1, 0x2, 0x1, 0x1, 0x3, 0x1, 0x1, 0x4, 0x1, 0x2, 0x80, 0x01, 0x80};
@@ -373,7 +399,7 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
     const uint8_t R_P2P[] = {0x1, 0x3, 0x0, 0x1, 0x5};
     uint8_t NCISetConfig_NFC[] = {0x20, 0x02, 0x1F, 0x02, 0x29, 0x0D, 0x46, 0x66, 0x6D, 0x01, 0x01, 0x11, 0x03, 0x02, 0x00, 0x01, 0x04, 0x01, 0xFA, 0x61, 0x0D, 0x46, 0x66, 0x6D, 0x01, 0x01, 0x11, 0x03, 0x02, 0x00, 0x01, 0x04, 0x01, 0xFA};
 
-    uint8_t NCIRouting[] = {0x21, 0x01, 0x07, 0x00, 0x01};
+    uint8_t NCIRouting[] = {0x21, 0x01, 0x07, 0x00, 0x01}; // RF_SET_LISTEN_MODE_ROUTING_CMD header with payload length 0x07, 0x00 = last message; 0x01 = The number of Routing Entry fields to follow (n).
     uint8_t NCISetConfig_NFCA_SELRSP[] = {0x20, 0x02, 0x04, 0x01, 0x32, 0x01, 0x00};
 
     if (mode == 0)
@@ -382,8 +408,10 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
     /* Enable Proprietary interface for T4T card presence check procedure */
     if (modeSE == 1)
     {
+        Serial.println("modeSE == 1");
         if (mode == MODE_RW)
         {
+            Serial.println("MODE_RW");
             (void)writeData(NCIPropAct, sizeof(NCIPropAct));
             getMessage(10);
 
@@ -397,6 +425,7 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
     if ((mode & MODE_CARDEMU and modeSE == 2) || (mode & MODE_P2P and modeSE == 3))
     {
+        Serial.println("build DC 1");
         std::size_t copyStartPos = 4 + (3 * Item);
         if ((copyStartPos + sizeof((modeSE == 2 ? DM_CARDEMU : DM_P2P))) >= MAX_NCI_FRAME_SIZE)
         {
@@ -407,6 +436,7 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
     }
     if (mode & MODE_RW and modeSE == 1)
     {
+        Serial.println("build DC 2");
         std::size_t copyStartPos = 4 + (3 * Item);
         if ((copyStartPos + sizeof(DM_RW)) >= MAX_NCI_FRAME_SIZE)
         {
@@ -417,8 +447,10 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
     }
     if (Item != 0)
     {
+        Serial.println("build DC 3");
         if (sizeof(NCIDiscoverMap) >= MAX_NCI_FRAME_SIZE)
         {
+            Serial.println("buffer overflow");
             return ERROR; // buffer overflow
         }
 
@@ -429,6 +461,7 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
         std::size_t writeSize = 3 + Command[2];
         if ((writeSize) >= MAX_NCI_FRAME_SIZE)
         {
+            Serial.println("buffer overflow");
             return ERROR; // buffer overflow
         }
 
@@ -436,6 +469,7 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
         getMessage(10);
         if ((rxBuffer[0] != 0x41) || (rxBuffer[1] != 0x00) || (rxBuffer[3] != 0x00))
         {
+            Serial.println("buffer overflow");
             return ERROR;
         }
     }
@@ -445,9 +479,11 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
     if (modeSE == 2 || modeSE == 3)
     { // Emulation or P2P
+        Serial.println("modeSE == 2 || modeSE == 3");
         std::size_t copyStartPos = 5 + (5 * Item);
         if ((copyStartPos + sizeof((modeSE == 2 ? R_CARDEMU : R_P2P))) >= MAX_NCI_FRAME_SIZE)
         {
+            Serial.println("buffer overflow");
             return ERROR; // buffer overflow
         }
 
@@ -456,8 +492,10 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
         if (Item != 0)
         {
+            Serial.println("build DC 4");
             if (sizeof(NCIRouting) >= MAX_NCI_FRAME_SIZE)
             {
+                Serial.println("buffer overflow");
                 return ERROR; // buffer overflow
             }
 
@@ -468,6 +506,7 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
             std::size_t writeSize = 3 + Command[2];
             if ((writeSize) >= MAX_NCI_FRAME_SIZE)
             {
+                Serial.println("buffer overflow");
                 return ERROR; // buffer overflow
             }
 
@@ -480,24 +519,36 @@ uint8_t PN7150::ConfigMode(uint8_t modeSE)
 
         if (NCISetConfig_NFCA_SELRSP[6] != 0x00)
         {
+            Serial.println("build DC 5");
             (void)writeData(NCISetConfig_NFCA_SELRSP, sizeof(NCISetConfig_NFCA_SELRSP));
             getMessage(10);
 
             if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00))
+            {
+                Serial.println("ERROR");
                 return ERROR;
+            }
             else
+            {
+                Serial.println("SUCCESS");
                 return SUCCESS;
+            }
         }
 
         if (mode & MODE_P2P and modeSE == 3)
         {
+            Serial.println("build DC 6");
             (void)writeData(NCISetConfig_NFC, sizeof(NCISetConfig_NFC));
             getMessage(10);
 
             if ((rxBuffer[0] != 0x40) || (rxBuffer[1] != 0x02) || (rxBuffer[3] != 0x00))
+            {
+                Serial.println("ERROR");
                 return ERROR;
+            }
         }
     }
+    Serial.println("Final SUCCESS");
     return SUCCESS;
 }
 
@@ -789,6 +840,7 @@ bool PN7150::configureSettings(void)
 
 uint8_t PN7150::StartDiscovery(uint8_t modeSE)
 {
+    Serial.println("StartDiscovery");
     int mode = PN7150::getMode();
     if (mode != modeSE)
     {
@@ -815,16 +867,25 @@ uint8_t PN7150::StartDiscovery(uint8_t modeSE)
     NCIStartDiscovery_length = (TechTabSize * 2) + 4;
     if (NCIStartDiscovery_length >= maxNCIStartDiscoveryLength)
     {
+        Serial.println("buffer overflow");
         return ERROR; // buffer overflow
     }
 
+    PrintArray("NCIStartDiscovery cmd", NCIStartDiscovery, NCIStartDiscovery_length);
     (void)writeData(NCIStartDiscovery, NCIStartDiscovery_length);
     getMessage();
+    PrintArray("rsp", rxBuffer, rxMessageLength);
 
     if ((rxBuffer[0] != 0x41) || (rxBuffer[1] != 0x03) || (rxBuffer[3] != 0x00))
+    {
+        Serial.println("ERROR");
         return ERROR;
+    }
     else
+    {
+        Serial.println("SUCCESS");
         return SUCCESS;
+    }
 }
 
 uint8_t PN7150::startDiscovery()
@@ -865,6 +926,7 @@ wait:
     /* Is RF_INTF_ACTIVATED_NTF ? */
     if (rxBuffer[1] == 0x05)
     {
+        PrintArray("RF_INTF_ACTIVATED_NTF", rxBuffer, rxMessageLength);
         pRfIntf->Interface = rxBuffer[4];
         remoteDevice.setInterface(rxBuffer[4]);
         pRfIntf->Protocol = rxBuffer[5];
@@ -879,6 +941,7 @@ wait:
         /* Verifying if not a P2P device also presenting T4T emulation */
         if ((pRfIntf->Interface == INTF_ISODEP) && (pRfIntf->Protocol == PROT_ISODEP) && ((pRfIntf->ModeTech & MODE_LISTEN) != MODE_LISTEN))
         {
+            Serial.println("P2P presenting T4T emulation");
             memcpy(saved_NTF, rxBuffer, sizeof(saved_NTF));
             while (1)
             {
@@ -932,6 +995,7 @@ wait:
     }
     else
     { /* RF_DISCOVER_NTF */
+        PrintArray("RF_DISCOVER_NTF", rxBuffer, rxMessageLength);
         pRfIntf->Interface = INTF_UNDETERMINED;
         remoteDevice.setInterface(interface.UNDETERMINED);
         pRfIntf->Protocol = rxBuffer[4];
@@ -945,18 +1009,25 @@ wait:
         do
         {
             if (!getMessage(100))
+            {
+                Serial.println("ERROR");
                 return ERROR;
+            }
         } while ((rxBuffer[0] != 0x61) || (rxBuffer[1] != 0x03));
         gNextTag_Protocol = rxBuffer[4];
 
         /* Remaining NTF ? */
         if (rxMessageLength >= rxBufferSize)
         {
+            Serial.println("buffer overlow");
             return ERROR;
         }
 
         while (rxBuffer[rxMessageLength - 1] == 0x02)
+        {
             getMessage(100);
+            PrintArray("while message", rxBuffer, rxMessageLength);
+        }
 
         /* In case of multiple cards, select the first one */
         NCIRfDiscoverSelect[4] = remoteDevice.getProtocol();
@@ -971,17 +1042,20 @@ wait:
 
         (void)writeData(NCIRfDiscoverSelect, sizeof(NCIRfDiscoverSelect));
         getMessage(100);
+        PrintArray("NCIRfDiscoverSelect rsp", rxBuffer, rxMessageLength);
 
         if ((rxBuffer[0] == 0x41) || (rxBuffer[1] == 0x04) || (rxBuffer[3] == 0x00))
         {
             if (rxMessageLength >= rxBufferSize)
             {
+                Serial.println("buffer overlow");
                 return ERROR; // buffer overflow
             }
 
+            PrintArray("cmd 1", rxBuffer, rxMessageLength);
             (void)writeData(rxBuffer, rxMessageLength);
             getMessage(100);
-
+            PrintArray("rsp", rxBuffer, rxMessageLength);
             if ((rxBuffer[0] == 0x61) || (rxBuffer[1] == 0x05))
             {
                 pRfIntf->Interface = rxBuffer[4];
@@ -996,6 +1070,7 @@ wait:
             /* In case of P2P target detected but lost, inform application to restart discovery */
             else if (remoteDevice.getProtocol() == protocol.NFCDEP)
             {
+                Serial.println("P2P target detected but lost, restart discovery");
                 /* Restart the discovery loop */
                 (void)writeData(NCIStopDiscovery, sizeof(NCIStopDiscovery));
                 getMessage();
@@ -1003,6 +1078,7 @@ wait:
 
                 if (NCIStartDiscovery_length >= maxNCIStartDiscoveryLength)
                 {
+                    Serial.println("buffer overlow");
                     return ERROR; // buffer overflow
                 }
 
@@ -1017,6 +1093,7 @@ wait:
     /* In case of unknown target align protocol information */
     if (remoteDevice.getInterface() == interface.UNDETERMINED)
     {
+        Serial.println("Unkown target, align protocol information");
         pRfIntf->Protocol = PROT_UNDETERMINED;
         remoteDevice.setProtocol(protocol.UNDETERMINED);
     }
@@ -1186,16 +1263,22 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
     if ((RfIntf.ModeTech & MODE_LISTEN) != MODE_LISTEN)
     {
         /* Initiate communication (SYMM PDU) */
+        PrintArray("NCILlcpSymm command", NCILlcpSymm, sizeof(NCILlcpSymm));
         (void)writeData(NCILlcpSymm, sizeof(NCILlcpSymm));
         getMessage();
+        PrintArray("NCILlcpSymm rsp", rxBuffer, rxMessageLength);
 
         /* Save status for discovery restart */
         restart = true;
     }
     status = ERROR;
     getMessage(2000);
+    PrintArray("First rsp", rxBuffer, rxMessageLength);
     if (rxMessageLength > 0)
+    {
+        Serial.println("SUCCESS");
         status = SUCCESS;
+    }
 
     /* Get frame from remote peer */
     while (status == SUCCESS)
@@ -1217,8 +1300,12 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
             {
                 return; // buffer overflow
             }
+
+            PrintArray("Cmd 1", Cmd, CmdSize + 3);
             (void)writeData(Cmd, CmdSize + 3);
+
             getMessage();
+            PrintArray("rsp", rxBuffer, rxMessageLength);
             if (rxMessageLength > 0)
                 status = SUCCESS;
         }
@@ -1226,37 +1313,52 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
         else if ((rxBuffer[0] == 0x60) && (rxBuffer[1] == 0x08))
         {
             /* Come back to discovery state */
+            Serial.println("CORE_INTERFACE_ERROR_NTF");
             break;
         }
         /* is RF_DEACTIVATE_NTF ? */
         else if ((rxBuffer[0] == 0x61) && (rxBuffer[1] == 0x06))
         {
             /* Come back to discovery state */
+            Serial.println("RF_DEACTIVATE_NTF");
             break;
         }
         /* is RF_DISCOVERY_NTF ? */
         else if ((rxBuffer[0] == 0x61) && ((rxBuffer[1] == 0x05) || (rxBuffer[1] == 0x03)))
         {
+            Serial.println("RF_DEACTIVATE_NTF or RF_INTF_ACTIVATED_NTF");
             do
             {
                 if ((rxBuffer[0] == 0x61) && ((rxBuffer[1] == 0x05) || (rxBuffer[1] == 0x03)))
                 {
                     if ((rxBuffer[6] & MODE_LISTEN) != MODE_LISTEN)
+                    {
                         restart = true;
+                        Serial.println("restart = true");
+                    }
                     else
+                    {
                         restart = false;
+                        Serial.println("restart = false");
+                    }
                 }
                 status = ERROR;
 
                 if (rxMessageLength >= rxBufferSize)
                 {
+                    Serial.println("buffer overflow");
                     return; // buffer overflow
                 }
 
+                PrintArray("cmd 2", rxBuffer, rxMessageLength);
                 (void)writeData(rxBuffer, rxMessageLength);
                 getMessage();
+                PrintArray("rsp", rxBuffer, rxMessageLength);
                 if (rxMessageLength > 0)
+                {
                     status = SUCCESS;
+                    Serial.println("SUCCESS");
+                }
             } while (rxMessageLength != 0);
             /* Come back to discovery state */
             break;
@@ -1267,10 +1369,14 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
 
         if (rxMessageLength >= rxBufferSize)
         {
+            Serial.println("buffer overflow");
             return; // buffer overflow
         }
+
+        PrintArray("cmd 3", rxBuffer, rxMessageLength);
         (void)writeData(rxBuffer, rxMessageLength);
         getMessage();
+        PrintArray("rsp", rxBuffer, rxMessageLength);
         if (rxMessageLength > 0)
             status = SUCCESS;
     }
@@ -1278,10 +1384,14 @@ void PN7150::processP2pMode(RfIntf_t RfIntf)
     /* Is Initiator mode ? */
     if (restart)
     {
+        Serial.println("restart");
         /* Communication ended, restart discovery loop */
+        PrintArray("NCIRestartDiscovery cmd", rxBuffer, rxMessageLength);
         (void)writeData(NCIRestartDiscovery, sizeof(NCIRestartDiscovery));
         getMessage();
+        PrintArray("rsp 1", rxBuffer, rxMessageLength);
         getMessage(100);
+        PrintArray("rsp 2", rxBuffer, rxMessageLength);
     }
 }
 
@@ -1513,11 +1623,14 @@ bool PN7150::activateNextTagDiscovery()
     return !PN7150::ReaderActivateNext(&this->dummyRfInterface);
 }
 
+
+
 void PN7150::readNdef(RfIntf_t RfIntf)
 {
     uint8_t Cmd[MAX_NCI_FRAME_SIZE];
     uint16_t CmdSize = 0;
 
+    Serial.println("Protocol type: " + String(remoteDevice.getProtocol()));
     RW_NDEF_Reset(remoteDevice.getProtocol());
 
     while (1)
@@ -1526,43 +1639,55 @@ void PN7150::readNdef(RfIntf_t RfIntf)
         if (CmdSize == 0)
         {
             /// End of the Read operation
+            Serial.println("End of the Read operation");
             break;
         }
         else
         {
             // Compute and send DATA_PACKET
+            Serial.println("Computing data packet");
             Cmd[0] = 0x00;
             Cmd[1] = (CmdSize & 0xFF00) >> 8;
             Cmd[2] = CmdSize & 0x00FF;
 
             if (CmdSize >= MAX_NCI_FRAME_SIZE - 3)
             {
+                Serial.println("Buffer overflow");
                 return; // buffer overflow
             }
 
+            PrintArray("Command", Cmd, CmdSize + 3);
             (void)writeData(Cmd, CmdSize + 3);
+
             getMessage();
+            PrintArray("First message", rxBuffer, rxMessageLength);
+
             getMessage(1000);
+            PrintArray("Second message", rxBuffer, rxMessageLength);
 
             // Manage chaining in case of T4T
             if (remoteDevice.getInterface() == INTF_ISODEP && rxBuffer[0] == 0x10)
             {
+                Serial.println("Handle chaining");
                 uint8_t tmp[MAX_NCI_FRAME_SIZE];
                 uint8_t tmpSize = 0;
                 while (rxBuffer[0] == 0x10)
                 {
                     if (tmpSize + rxBuffer[2] >= MAX_NCI_FRAME_SIZE)
                     {
+                        Serial.println("Buffer overflow");
                         return; // buffer overflow
                     }
 
                     memcpy(&tmp[tmpSize], &rxBuffer[3], rxBuffer[2]);
                     tmpSize += rxBuffer[2];
                     getMessage(100);
+                    PrintArray("Chained message", rxBuffer, rxMessageLength);
                 }
 
                 if (tmpSize + rxBuffer[2] >= MAX_NCI_FRAME_SIZE)
                 {
+                    Serial.println("Buffer overflow");
                     return; // buffer overflow
                 }
 
@@ -1572,6 +1697,7 @@ void PN7150::readNdef(RfIntf_t RfIntf)
 
                 if (tmpSize >= rxBufferSize - 3)
                 {
+                    Serial.println("Buffer overflow");
                     return; // buffer overflow
                 }
                 memcpy(&rxBuffer[3], tmp, tmpSize);

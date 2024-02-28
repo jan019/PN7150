@@ -91,6 +91,7 @@ void RW_NDEF_Reset(unsigned char type) {
       pWriteFct = RW_NDEF_MIFARE_Write_Next;
       break;
     default:
+      Serial.println("RW_NDEF_Reset: Unknown type");
       break;
   }
 }
